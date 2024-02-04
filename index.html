@@ -14,5 +14,32 @@
 </head>
 <body class="flex justify-center items-center h-screen text-white bg-black">
     <h1 class="text-4xl font-bold text-purple-800 bg-blue-900 p-4 rounded">Hello, World!</h1>
+
+
+    <!-- Button to kick off a USBHID session device request -->
+    <button id="usbhid-button" class="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        Start USBHID Session
+    </button>
+
+    <script>
+        // Get the button element
+        const usbhidButton = document.getElementById('usbhid-button');
+
+        // Add event listener for the button click
+        usbhidButton.addEventListener('click', async () => {
+            // Request USB device
+            let device;
+            try {
+                device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2341 }] });
+            } catch (err) {
+                console.error("No device was selected", err);
+            }
+
+            // If device is selected, start a session
+            if (device !== undefined) {
+                console.log("USBHID session started with device: ", device.productName);
+            }
+        });
+    </script>
 </body>
 </html>
