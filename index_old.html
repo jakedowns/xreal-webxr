@@ -1,0 +1,535 @@
+<html>
+<head>
+    <style>
+        html,body {
+            font-family: sans-serif;
+        }
+        #imu, #imu-labels {
+            font-family: monospace;
+        }
+        #imu {
+            display: block;
+            position: relative;
+            width: 100%;
+        }
+        #imu-bars {
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+            height: 300px;
+            clear: both;
+        }
+        #imu-bars .bar {
+            width: 24px;
+            background: blue;
+            margin: 0 7px 0 0;
+            
+            min-height: 1px;
+        }
+        #imu-bars .bar.bar-gap {
+            margin-right: 39px;
+        }
+        #sparklines {
+            display: block;
+        }
+        #sparklines .sparkline-wrapper {
+            float: left;
+            width: 500px;
+            height: 50px;
+            margin-right: 10px;
+            position: relative;
+            margin-bottom: 10px;
+        }
+        #sparklines .sparkline-label {
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: black;
+            color: white;
+        }
+        #sparklines .sparkline {
+            width: 500px;
+            background: beige;
+/*            border: 1px solid blue;*/
+            height: 50px;
+            min-width: 500px;
+            min-height: 50px;
+            display: block;
+        }
+        
+        .sparkline {
+          stroke: transparent;
+          fill: blue;
+        }
+        /*.sparkline--line {
+            stroke: red;
+        }
+        .sparkline--fill {
+            fill: blue;
+        }*/
+    </style>
+</head>
+<body>
+    <div id="noSupportHid"></div>
+	<div id="connect"><button>connect</button></div>
+    <div id="disconnect" onclick="disconnectDevices()"><button>disconnect</button></div>
+    <div id="hadConnect"></div>
+    <div id="sn"></div>
+    <div id="firmwareMcu"></div>
+    <div id="firmwareDp"></div>
+    <!-- <div id="getBrightness" onclick="window.getBrightness()"><button>get brightness</button></div> -->
+    <!-- <div id="setBrightness" onclick="window.setBrightness()"><button>set brightness</button></div> -->
+    <input type="range" min="1" max="8" step="1" value="8" 
+            name="brightness" 
+            oninput="window.updateBrightness(event)">
+    <!-- <label for="brightness">set brightness to: <span class="req-brightness-value"></span> </label> -->
+    <div>current brightness: <span class="current-brightness">?</span></div>
+
+    <hr/>
+    <div id="imu-labels"></div>
+    <div id="imu"></div>
+    <div id="imu-bars"></div>
+    <div id="sparklines"></div>
+	
+
+    <hr/>
+	<div id="output"></div>
+	
+	<script type="module">
+
+    // if(!header){
+    //     window.location.href = 'https://www-uat.nreal.cn/support/activationGlasses/'
+    // }
+
+    import * as Manager from './js_air/manager.js';
+    import * as Common from './common.js';
+    //import * as GA from '../addGa.js';
+    import http from "../tools/http.js"
+    // import downloadfiles from "../tools/downloadfile.js"
+
+    const hidFilters = [
+        { 'vendorId': 0x3318 }, // NReal Vendor ID, Gleaming Reality?
+    ];
+
+    let binFile = null;
+    let currentGlass = null;
+
+    window.Manager = Manager;
+
+
+    // UI Stuff / todo remake in vue or something
+    // let brightness_out = document.querySelector('[name="brightness"]').value;
+
+    window.updateBrightness = function(event) {
+        //console.log(event);
+        let value = event.target.value;
+        console.log(value);
+        // document.querySelector('.req-brightness-value').innerHTML = value;
+        // brightness_out = value;
+    }
+
+
+/*
+    async function upgradeMcu() {
+        if (binFile == null) {
+            alert('Please select the firmware file or redownload it. ')
+            return;
+        }
+        let version = await Manager.getFirmwareVersionInMcu();
+        if (version == null) {
+            alert("The device is not connected, please connect the glasses");
+            return;
+        }
+        let result;
+        http.get({ url: `/nebula/v1/isc/admin/device/version/check?deviceType=2&country=2&fileType=10&currentFileName=air_${version}.bin`, timeout: 1000 }, async function (err, res) {
+            if (err) {
+                alert('Error. Please refresh and try again.')
+                return false;
+            } else {
+                if (res.data.isLatest) {
+                    document.getElementById('alreadyLast').innerText = "Your MCU firmware is the latest. There's no update available."
+                    document.getElementById('alreadyLast').style.display = 'block'
+                    return;
+                } else {
+                    document.getElementById('upgradeDp').disabled = true;
+                    let data = await binFile.arrayBuffer();
+                    // document.getElementById('tip').style.display = 'block'
+                    document.getElementById('upgradeMcu').style.display = 'none'
+                    document.getElementById('progress').style.display = 'block'
+                    result = await Manager.upgradeInMcu(await binFile.arrayBuffer());
+                    if (result) {
+                        // document.getElementById('tip').style.display = 'none'
+                        document.getElementById('outputMcu').style.display = 'block'
+                        let mcuTimer = setInterval(async () => {
+                            if (Common.curGlasses) {
+                                Manager.getFirmwareVersionInMcu().then(lastVersion => {
+                                    document.getElementById('latestVersionMcu').style.display = 'block';
+                                    document.getElementById('latestVersionMcu').innerText = lastVersion ? `Current MCU firmware version is: ${lastVersion}` : ''
+                                })
+                                    .catch(err => {
+                                        console.log('err', err)
+                                    })
+                                    .finally(() => {
+                                        clearInterval(mcuTimer);
+                                        mcuTimer = null;
+                                    })
+                            }
+                        }, 300);
+
+                    } else {
+                        document.getElementById('fail').style.display = 'block'
+                        
+
+                    }
+                    document.getElementById('upgradeDp').disabled = false;
+                }
+            }
+        });
+    }
+
+    async function upgradeInDp() {
+        if (binFile == null) {
+            alert('Please select the firmware file or redownload it. ')
+            return;
+        }
+        document.getElementById('alreadyLastDp').style.display = 'none'
+        document.getElementById('outputdp').style.display = 'none'
+        let dpVersion = await Manager.isNeedUpgradeInDp();
+        console.log('dpVersion', dpVersion)
+        if (dpVersion == null) {
+            alert("The device is not connected, please connect the glasses");
+            return;
+        }
+        if (!dpVersion) {
+            document.getElementById('alreadyLastDp').innerText = "Your DP firmware is the latest. There's no update available."
+            document.getElementById('alreadyLastDp').style.display = 'block'
+            
+            return;
+        }
+        
+        document.getElementById('tipdp').style.display = 'block'
+        document.getElementById('upgradeDp').style.display = 'none'
+        document.getElementById('progressDp').style.display = 'block'
+        let result;
+        result = await Manager.upgradeInDp();
+        if (result) {
+            document.getElementById('outputdp').style.display = 'block'
+            let dpTimer = setInterval(async () => {
+                if (Common.curGlasses) {
+                    Manager.getFirmwareVersionInDp()
+                        .then(lastVersion => {
+                            document.getElementById('latestVersionDp').style.display = 'block';
+                            document.getElementById('latestVersionDp').innerText = lastVersion ? `Current DP firmware version is: ${lastVersion}` : '';
+                        })
+                        .catch(err => { console.log(err) })
+                        .finally(() => {
+                            clearInterval(dpTimer)
+                            dpTimer = null
+                        })
+                }
+            }, 300);
+
+            
+        } else {
+            document.getElementById('progressDp').style.display = 'none';
+            document.getElementById('faildp').style.display = 'block'
+            
+        }
+    }
+
+    async function upgradeDsp() {
+        if (binFile == null) {
+            alert('Please select the firmware file or redownload it. ')
+            return;
+        }
+
+        // 拿到文件的版本号            
+        let version = binFile.name.slice(4, 9)
+        let flag = await Manager.isNeedUpgradeInDsp(version);
+        if (flag == null) {
+            alert("Please connect glasses first!");
+            return;
+        }
+        if (flag != 1) {
+            alert("Already the latest version!");
+            return
+        }
+
+        let data = await binFile.arrayBuffer();
+
+        let result = await Manager.upgradeInDsp(await binFile.arrayBuffer());
+        // let timer = setInterval(() => {
+        //     setOutput((Manager.current/Manager.total) * 100 + '%')
+        //     if(Manager.current == Manager.total){
+        //         clearInterval(timer)
+        //         setOutput(result)
+        //     }
+        // })
+
+        // setOutput((Manager.current/Manager.total) * 100 + '%')
+    }
+ */
+
+    // function downloadFile() {
+    //     http.get({ url: `/nebula/v1/isc/admin/device/version/check?deviceType=2&country=2&fileType=10&currentFileName=isLatest`, timeout: 1000 }, function (err, result) {
+    //         if (err) {
+    //             alert("download failed")
+    //         } else {
+    //             const url = result.data.uri
+    //             downloadfiles(url)
+    //         }
+    //     });
+    // }
+
+    async function isLastest(ver) {
+        http.get({ url: `/nebula/v1/isc/admin/device/version/check?deviceType=2&country=2&fileType=10&currentFileName=air_${ver}`, timeout: 1000 }, function (err, result) {
+            if (err) {
+                return false;
+            } else {
+                return result.data.isLatest
+            }
+        });
+    }
+
+    // 获取文件名
+    // function fileNameFromHeader (disposition) {
+    //     let result = null;
+    //     if (disposition && /filename=.*/ig.test(disposition)) {
+    //         result = disposition.match(/filename=.*/ig);
+    //         return decodeURI(result[0].split('=')[1]);
+    //     }
+    //     return null;
+    // }
+
+    // function selectbin() {
+    //     return Manager.selectBinFile().then(file => {
+    //         var reg = /07.[1-2].[0-9]{2}.[0-9]{3}_[0-9]{8}/g;
+    //         if (reg.test(file.name)) {
+    //             binFile = file;
+    //             document.getElementById('binfile').value = file.name;
+                
+    //         } else {
+    //             document.getElementById('binfile').value = " "
+    //             window.alert("Please select the firmware file or redownload it. ")
+    //             binFile = null
+                
+    //         }
+    //         return binFile;
+    //     });
+    // }
+
+    function connect() {
+        Common.connectDevice().then(async glasses => {
+            if (glasses) {
+                document.getElementById('hadConnect').style.display = 'block'
+                document.getElementById('connect').style.opacity = '0'
+                document.getElementById('firmwareMcu').innerText = 'Current glasses version is : ' + await firmwareMcu()
+
+                document.getElementById('firmwareDp').innerText = 'Current DP version is : ' + await firmwareDp()
+
+                document.getElementById('sn').innerText = 'SN：' + await getSN()
+            } else {
+
+            }
+            // document.getElementById('sn').innerHTML = getSN()
+            // document.getElementById('version').innerText = '版本号' + firmwareMcu()
+            setOutput('glasses : ' + glasses.toString());
+        });
+    }
+
+    function firmwareMcu() {
+        return Manager.getFirmwareVersionInMcu().then(version => {
+            // setOutput('firmware : ' + version);
+            return version
+        })
+    }
+
+    function firmwareDp() {
+        return Manager.getFirmwareVersionInDp().then(version => {
+            // setOutput('firmware : ' + version);
+            return version
+        })
+    }
+
+    function getSN() {
+        return Manager.getSN().then(version => {
+            // setOutput('SN : ' + version);
+            return version
+        });
+    }
+
+    function JumpToApp() {
+        Manager.boot2App().then(result => {
+            setOutput('jump to app : ' + result);
+        });
+    }
+
+    function serial() {
+        Manager.getSerialPort().then(version => {
+            setOutput('serial port: ' + version.serialNumber);
+        });
+    }
+
+    function deactivate() {
+        Manager.deactivate().then(result => {
+            setOutput('deactivate ' + result);
+        });
+    }
+
+    // function activate() {
+    //     let nowTime = new Date().getTime()
+    //     Manager.activate(nowTime).then(async result => {
+    //         if (result) {
+    //             let sn = await getSN()
+    //             const data = {
+    //                 sn,
+    //                 timestamp: nowTime,
+    //                 deviceType: 'Air_OTA'
+    //             }
+    //             document.getElementById('activeted').style.display = 'block'
+    //             document.getElementById('activate').style.opacity = '0'
+    //         } else {
+    //         }
+    //     });
+    // }
+
+    //上传测井数据表到服务器数据库 
+    // function PostToServer(data) {
+    //     var httpRequest = new XMLHttpRequest();//第一步：建立所需的对象
+    //     httpRequest.open("POST", "https://app-uat-api-cn.nreal.work/api/user-profile/v1/rest/device-activation/activate", true);  //调用AddDataToServer
+    //     httpRequest.setRequestHeader("Content-Type", "application/json");   //设置请求头信息
+    //     // httpRequest.setRequestHeader("Authorization", header);   //设置请求头信息
+    //     httpRequest.setRequestHeader("Authorization", header);   //设置请求头信息
+    //     httpRequest.send(JSON.stringify(data)); //设置为发送给服务器数据
+    // }
+
+    window.setOutput = function(output) {
+        document.getElementById('output').innerText = output + '<br/>' + document.getElementById('output').innerText;
+    }
+
+    window.getBrightness = function() {
+    	Manager.getBrightness().then(brightness => {
+			setOutput('brightness : ' + brightness);
+
+            document.querySelector('.current-brightness').innerText = brightness;
+		});
+    }
+
+    window.setBrightness = function() {
+        let brightness = document.querySelector('.brightness').value;
+        Manager.setBrightness(parseInt(brightness)-1).then(result => {
+            setOutput('set brightness : ' + result);
+        });
+    }
+
+    window.onBrightnessChanged = function(new_value) {
+        document.querySelector('[name="brightness"]').value = new_value;
+        document.querySelector('.current-brightness').innerText = new_value;
+    }
+
+    window.disconnectDevices = () => {
+        window.curGlassesArray.map(g=>{
+            g._device.close();
+            g._device.forget();
+        })
+    }
+
+    window.endpoints = [];
+
+    window.listUsbEndpoints = () => {
+        window.endpoints = [];
+        // list usb endpoints
+        navigator.usb.requestDevice({filters:[]}).then((device)=>{
+            window.usb_device = device;
+
+            //usb_device.configurations[0].interfaces[1].alternates[1].endpoints[0]
+
+            for(let configuration of device.configurations){
+
+                for(let _interface of configuration.interfaces){
+
+                    for(let alternate of _interface?.alternates ?? []){
+
+                        for(let endpoint of alternate.endpoints){
+
+                            window.endpoints.push(endpoint);
+                        }
+                    }
+                }
+            }
+
+            console.table(window.endpoints);
+        })
+        
+    }
+    
+
+    window.sparkline_elements = [];
+
+    window.onload = async () => {
+
+        for(var i = 0; i<41; i++){
+            let child = document.createElement('div');
+            child.classList.add('bar');
+            if((i+1) % 4 === 0){
+                child.classList.add('bar-gap');
+            }
+            document.getElementById('imu-bars').append(child)
+
+            document.getElementById('imu-labels').innerHTML+= i.toString().padStart(3,'0') + ' ';
+            if((i+1)%4 === 0){
+                document.getElementById('imu-labels').innerHTML+= '&nbsp;|&nbsp;&nbsp;';
+            }
+
+            //<svg class="sparkline" width="100" height="30" stroke-width="0"></svg>
+            // const _svg = document.createElement('svg');
+            var  svgns = "http://www.w3.org/2000/svg";
+            var  _svg = document.createElementNS(svgns,'svg');
+            _svg.classList.add('sparkline')
+            _svg.setAttribute('width', '500')
+            _svg.setAttribute('height', '50')
+            _svg.setAttribute('stroke-width', '0')
+            _svg.setAttributeNS(null, 'viewBox', '0 0 500 50')
+            // _svg.setAttribute('viewBox', '0 0 500 50')
+
+            const _span = document.createElement('span')
+            _span.classList.add('sparkline-label')
+            _span.innerText = (i).toString().padStart(3,'0');
+
+            window.sparkline_elements.push(_svg)
+
+            const _sl_wrapper = document.createElement('div');
+            _sl_wrapper.classList.add('sparkline-wrapper')
+            _sl_wrapper.append(_span)
+            _sl_wrapper.append(_svg)
+
+            document.getElementById('sparklines').append(_sl_wrapper)
+        }
+
+        if (!Manager?.hidSupported()) {
+            document.getElementById('noSupportHid').style.display = "block";
+            return;
+        }
+        window.Common = Common;
+        Common.addHidListener();
+        Common.checkConnection(); // see if we can re-connect
+        // Manager.addHidListener();
+        // Manager.addSerialListener();
+        document.getElementById('connect').onclick = connect;
+        //document.getElementById('getBrightness').onclick = getBrightness;
+        // document.getElementById('activate').onclick = activate;
+        // document.getElementById('downloadFile').onclick = downloadFile;
+        // document.getElementById('deactivate').onclick = deactivate;
+        // document.getElementById('firmwareMcu').onclick = firmwareMcu;
+        // document.getElementById('SN').onclick = getSN;
+        // document.getElementById('app').onclick = JumpToApp;
+        // document.getElementById('serial').onclick = serial;
+        // document.getElementById('upload').onclick = upload;
+        // document.getElementById('selectbin').onclick = selectbin;
+        // document.getElementById('upgradeMcu').onclick = upgradeMcu;
+        // document.getElementById('upgradeDp').onclick = upgradeInDp;
+        // document.getElementById('upgradeDsp').onclick = upgradeDsp;
+    }
+</script>
+</body>
+</html>

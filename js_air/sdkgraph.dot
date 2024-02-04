@@ -1,0 +1,37 @@
+digraph G {
+  NRSessionManager -> NRSubsystemManager
+  
+  NRSubsystemManager -> NRDeviceSubsystem
+
+  NRDeviceSubsystem -> m_NativeGlassesController
+  NRDeviceSubsystem -> m_NativeHMD
+  
+  m_NativeGlassesController -> GetTempratureLevel
+  
+  NRSessionManager -> TrackingSubSystem
+  
+  TrackingSubSystem -> InitTrackingMode
+  TrackingSubSystem -> _tss_Start
+  TrackingSubSystem -> Recenter
+  
+  NRRenderer
+  
+  TrackableFactory -> _tf_Start
+  
+  NRTrackingModeChangedListener
+  
+  NRDebugger -> Log
+  
+  NRKernel -> NRDevice -> NRDevice_init
+  NRKernalUpdater
+  NRNotificationListener
+  NRKernel -> GlassesTemperatureLevel
+  NRKernel -> AsyncTaskExecuter
+  
+  NRSessionManager -> CreateSession -> NRDevice_init
+  NRSessionManager -> AutoAdaptSessionConfig
+  
+  NativeAPI -> NativeInterface
+  NativeAPI -> Configration -> UpdateConfig
+  
+}
