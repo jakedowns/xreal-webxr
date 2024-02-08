@@ -26,7 +26,7 @@ based on combined effort of:
 - [breezy desktop](https://github.com/wheaney/breezy-desktop) - Linux
 - [cozy desk](https://cozydesk.space/download/) - Mac
 - [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker/releases) - Windows
-- [Monodo - xreal support](https://gitlab.freedesktop.org/monado/monado/-/tree/main/src/xrt/drivers/nreal_air) - Linux + OpenXR (via [TheJackiMonster](https://gitlab.com/TheJackiMonster))
+- [Monado - xreal support](https://gitlab.freedesktop.org/monado/monado/-/tree/main/src/xrt/drivers/nreal_air) - Linux + OpenXR (via [TheJackiMonster](https://gitlab.com/TheJackiMonster))
 
 ### Utilities
 
