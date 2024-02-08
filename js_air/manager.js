@@ -508,6 +508,22 @@ export async function getSN() {
         });
 }
 
+/** init air IMU tracking mode */
+export async function startIMU() {
+    if(!glasses){
+        return 'no device connected'
+    }
+    return glasses.sendReportTimeout(Protocol.MESSAGES.R_INIT_IMU_TRACKING_SESSION)
+        .then(report => {
+            console.warn('startIMU -> report',report);
+            if (reportSuccess(report)){
+                return String.fromCharCode.apply(null, report.payload);
+            }else{
+                console.error('error w/ report',report)
+            }
+        })
+}
+
 /** read air glassess Brightness */
 export async function getBrightness() {
     let glasses = await common.connectDevice();

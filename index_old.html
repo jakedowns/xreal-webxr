@@ -73,6 +73,7 @@
     <div id="noSupportHid"></div>
 	<div id="connect"><button>connect</button></div>
     <div id="disconnect" onclick="disconnectDevices()"><button>disconnect</button></div>
+    <div id="startIMU" style="display: none;" onclick="startIMU()"><button>start headtracking</button></div>
     <div id="hadConnect"></div>
     <div id="sn"></div>
     <div id="firmwareMcu"></div>
@@ -321,6 +322,7 @@
     function connect() {
         Common.connectDevice().then(async glasses => {
             if (glasses) {
+                document.getElementById('startIMU').style.display = 'block'
                 document.getElementById('hadConnect').style.display = 'block'
                 document.getElementById('connect').style.opacity = '0'
                 document.getElementById('firmwareMcu').innerText = 'Current glasses version is : ' + await firmwareMcu()
@@ -329,7 +331,7 @@
 
                 document.getElementById('sn').innerText = 'SN：' + await getSN()
             } else {
-
+                document.getElementById('startIMU').style.display = 'none'
             }
             // document.getElementById('sn').innerHTML = getSN()
             // document.getElementById('version').innerText = '版本号' + firmwareMcu()
@@ -425,6 +427,10 @@
     window.onBrightnessChanged = function(new_value) {
         document.querySelector('[name="brightness"]').value = new_value;
         document.querySelector('.current-brightness').innerText = new_value;
+    }
+
+    window.startIMU = function(){
+        Manager.startIMU();
     }
 
     window.disconnectDevices = () => {
