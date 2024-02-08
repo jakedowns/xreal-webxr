@@ -21,6 +21,8 @@ based on combined effort of:
 
 ### Projects using Open Source Xreal Drivers
 
+- [OpenGL demo program](https://github.com/abls/real-air)
+- [kassandra](https://www.youtube.com/watch?v=7pH2VvUTZIQ) Kassandra: AR for all Macs with Nreal Air, is now in Public Beta
 - [breezy desktop](https://github.com/wheaney/breezy-desktop) - Linux
 - [cozy desk](https://cozydesk.space/download/) - Mac
 - [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker/releases) - Windows
@@ -29,6 +31,8 @@ based on combined effort of:
 ### Utilities
 
 - [Unofficial Firmware Mirror](https://air.msmithdev.com/) - Web Firmware Updater Mirror
+- [IMU Inspector](https://github.com/abls/imu-inspector) 
+
 
 
 ### Roadmap
