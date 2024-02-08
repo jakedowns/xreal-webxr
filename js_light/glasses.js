@@ -32,6 +32,7 @@ export default class Glasses extends EventTarget {
 
     // light connect
     sendReport(msgId, payload, option) {
+        console.warn('js_light:sendReport',{msgId,payload,option})
         const data = new Uint8Array(payload);
         const cmd = Protocol.cmd_build(msgId, data, option);
         this._device.sendReport(0x00, cmd);

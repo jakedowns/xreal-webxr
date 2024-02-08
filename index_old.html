@@ -74,6 +74,7 @@
 	<div id="connect"><button>connect</button></div>
     <div id="disconnect" onclick="disconnectDevices()"><button>disconnect</button></div>
     <div id="startIMU" style="display: none;" onclick="startIMU()"><button>start headtracking</button></div>
+    <div id="stopIMU" style="display: none;" onclick="stopIMU()"><button>stop headtracking</button></div>
     <div id="hadConnect"></div>
     <div id="sn"></div>
     <div id="firmwareMcu"></div>
@@ -430,7 +431,19 @@
     }
 
     window.startIMU = function(){
-        Manager.startIMU();
+        Manager.startIMU().then(result=>{
+            console.warn('Manager.startIMU().then...',{result})
+        }).catch(err=>{
+            console.error(err)
+        });
+    }
+
+    window.stopIMU = function(){
+        Manager.stopIMU().then(result=>{
+            console.warn('Manager.stopIMU().then...',{result})
+        }).catch(err=>{
+            console.error(err)
+        });
     }
 
     window.disconnectDevices = () => {

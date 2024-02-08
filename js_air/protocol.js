@@ -10,10 +10,10 @@ const RESERVED_OFS = 17;
 
 export const NREAL_VENDOR_ID = 0x3318;
 export const BOOT_PRODUCT_ID = 0x0423;
-
+export const IMU_TIMEOUT = 250;
 
 export const MESSAGES = {
-    W_CANCEL_ACTIVATION: 0x19,
+    
     R_MCU_APP_FW_VERSION: 0x26,//MCU APP FW version.
     R_GLASSID: 0x15,//MCU APP FW version.
     // R_DSP_APP_FW_VERSION: 0x21,//DSP APP FW version.
@@ -21,6 +21,9 @@ export const MESSAGES = {
     R_ACTIVATION_TIME: 0x29,//Read activation time
     W_ACTIVATION_TIME: 0x2A,//Write activation time
     W_SLEEP_TIME: 0x1E,//Write unsleep time
+
+    W_TOGGLE_IMU: 0x19, 
+    W_CANCEL_ACTIVATION: 0x19,
 
     // R_IS_NEED_UPGRADE_DSP_FW: 0x49,//Check whether the DSP needs to be upgraded.
     // W_FORCE_UPGRADE_DSP_FW: 0x69,//Force upgrade DSP.

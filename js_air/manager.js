@@ -511,11 +511,27 @@ export async function getSN() {
 /** init air IMU tracking mode */
 export async function startIMU() {
     if(!glasses){
-        return 'no device connected'
+        return Promise.reject('no device connected')
     }
-    return glasses.sendReportTimeout(Protocol.MESSAGES.R_INIT_IMU_TRACKING_SESSION)
+    return glasses.sendReportTimeout(Protocol.MESSAGES.W_TOGGLE_IMU, [1])
         .then(report => {
             console.warn('startIMU -> report',report);
+            if (reportSuccess(report)){
+                return String.fromCharCode.apply(null, report.payload);
+            }else{
+                console.error('error w/ report',report)
+            }
+        })
+}
+
+export async function stopIMU() {
+    if(!glasses){
+        return 'no device connected'
+    }
+    // arg 2: 0 is what turns "off" the stream
+    return glasses.sendReportTimeout(Protocol.MESSAGES.W_TOGGLE_IMU, [0])
+        .then(report => {
+            console.warn('stopIMU -> report',report);
             if (reportSuccess(report)){
                 return String.fromCharCode.apply(null, report.payload);
             }else{

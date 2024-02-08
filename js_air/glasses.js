@@ -392,18 +392,16 @@ export default class Glasses extends EventTarget {
     sendReport(msgId, payload) {
         const data = new Uint8Array(payload);
         const cmd = Protocol.cmd_build(msgId, data);
-        // console.log({
-        //     msgId,
-        //     payload,
-        //     data,
-        //     cmd
-        // })
+        
+        console.warn('js_air:sendReport',{msgId,payload})
 
         console.table([{
+            id: 'sendReport',
             dir: 'OUT',
             msgId: [msgId, '0x'+(msgId.toString(16))].join(' '),
             key: Protocol.keyForHex(msgId),
             payload: data.join(' '),
+            _input_payload: payload,
             cmd: cmd.map(b => b.toString(16).padStart(2, "0")).join(' ')
         }])
         this._device.sendReport(0x00, cmd);
