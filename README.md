@@ -1,5 +1,7 @@
 # xreal-webxr
 
+⭐ Please star this repo if you find this work helpful! 🤩
+
 work in progress; webxr support for xreal devices
 
 > WebXR Bindings and Test Utilities / Getting-Started Example(s) Basis for NPM package
@@ -32,6 +34,7 @@ work in progress; webxr support for xreal devices
 - 🪞 [Unofficial Firmware Archive Mirror](https://air.msmithdev.com/)
 - 🔍 [IMU Inspector](https://github.com/abls/imu-inspector)
 - 📊 [Real Utilities](https://github.com/edwatt/real_utilities/)
+- [xioTechnologies/Fusion](https://github.com/xioTechnologies/Fusion) - sensor fusion library 
 
 
 ### Special Thanks!
