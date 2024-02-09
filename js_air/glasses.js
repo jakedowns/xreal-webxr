@@ -131,6 +131,10 @@ window.logPackets = () => {
 // }
 
 export default class Glasses extends EventTarget {
+
+    /* RepeatingDeviceReportPoll */
+    imu_poller_instance = null;
+
     constructor(device) {
         console.log('constructing');
         super();
@@ -138,6 +142,25 @@ export default class Glasses extends EventTarget {
         this._interestMsg = [];
         this._reports = new Map();
         this._captures = [];
+
+        // creates it, but doesn't start it...
+        this.imu_poller_instance = new RepeatingDeviceReportPoll({
+            interval: 100,
+            callback: ()=>{
+                this.sendReport(Protocol.MESSAGES.R_IMU_DATA).then((report)=>{
+                    if(report){
+                        console.log('got report',report)
+                    }else{
+                        console.log('no report')
+                    }
+                }).catch((e)=>{
+                    console.error('error sending report',e)
+                }).finally(()=>{
+                    //console.log('finally')
+                });
+            }
+        });
+
         // set input listener
         device.oninputreport = this._handleInputReport.bind(this);
 
@@ -151,6 +174,14 @@ export default class Glasses extends EventTarget {
         }
 
         // this.renderSparklines();
+    }
+
+    startIMUPolling(){
+        this.imu_poller_instance.start();
+    }
+
+    stopIMUPolling(){
+        this.imu_poller_instance.end();
     }
 
     renderSparklines(){
@@ -229,7 +260,7 @@ export default class Glasses extends EventTarget {
         }
 
         if(report.msgId === 0){
-            // console.log(report.payload.length, report.status)
+            console.log(report.payload.length, report.status)
             imu_report_current++;
 
             
@@ -429,5 +460,36 @@ export default class Glasses extends EventTarget {
 
     toString() {
         return `<Glasses deviceName=${this._device.productName} vid=${this._device.vendorId} pid=${this._device.vendorId}>`;
+    }
+
+
+}
+
+class RepeatingDeviceReportPoll {
+    timer = null;
+    constructor(opts = {}){
+        opts = opts || {};
+        opts = {
+            interval: 100,
+            callback: ()=>{}, // this is the function that will be called
+            ...opts
+        }
+        
+    }
+
+    start(){
+        this.ended = false;
+        this.timer = setInterval(() => {
+            if(this.ended){
+                clearInterval(this.timer)
+            }else{
+                opts.callback()
+            }
+        },opts.interval)
+    }
+
+    end(){
+        // stop the timer on next tick
+        this.ended = true;
     }
 }
