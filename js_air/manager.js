@@ -241,124 +241,124 @@ export function Asc2Hex(value) {
 //         });
 // }
 
-export async function upgradeInDsp(data) {
-    let glasses = await common.connectDevice();
-    if (!glasses) {
-        return false;
-    }
-    return sendFirmwareInDsp(glasses, data);
-}
+// export async function upgradeInDsp(data) {
+//     let glasses = await common.connectDevice();
+//     if (!glasses) {
+//         return false;
+//     }
+//     return sendFirmwareInDsp(glasses, data);
+// }
 
 /** need to upgrade firmware DP version? */
-export async function isNeedUpgradeInDp() {
-    let glasses = await common.connectDevice();
-    if (!glasses) {
-        return 'not found device';
-    }
-    return glasses.sendReportTimeout(Protocol.MESSAGES.R_DP7911_FW_IS_UPDATE)
-        .then(report => {
-            if (reportSuccess(report)) {
-                return report.payload[0]
-            }
-        });
-}
+// export async function isNeedUpgradeInDp() {
+//     let glasses = await common.connectDevice();
+//     if (!glasses) {
+//         return 'not found device';
+//     }
+//     return glasses.sendReportTimeout(Protocol.MESSAGES.R_DP7911_FW_IS_UPDATE)
+//         .then(report => {
+//             if (reportSuccess(report)) {
+//                 return report.payload[0]
+//             }
+//         });
+// }
 
-export async function upgradeInDp() {
-    let glasses = await common.connectDevice();
-    if (!glasses) {
-        return false;
-    }
-    // 添加眼镜休眠时间
-    const time = Protocol.time2Bytes('600');
-    return glasses.sendReportTimeout(Protocol.MESSAGES.W_SLEEP_TIME, time)
-        .then(report => {
-            if (reportSuccess(report)) {
-                return glasses.sendReportTimeout(Protocol.MESSAGES.W_UPDATE_DP)
-                    .then(async report => {
-                        if (reportSuccess(report)) {
-                            // wait for air dp upgrade completed
-                            while(!glasses._reports.has(27661) && common.curGlasses){
-                                await sleep(500)
-                                dpCurrent = glasses._reports.get(27660) ? glasses._reports.get(27660).status : 0
-                                progressInDp(dpCurrent)
-                            }
+// export async function upgradeInDp() {
+//     let glasses = await common.connectDevice();
+//     if (!glasses) {
+//         return false;
+//     }
+//     // 添加眼镜休眠时间
+//     const time = Protocol.time2Bytes('600');
+//     return glasses.sendReportTimeout(Protocol.MESSAGES.W_SLEEP_TIME, time)
+//         .then(report => {
+//             if (reportSuccess(report)) {
+//                 return glasses.sendReportTimeout(Protocol.MESSAGES.W_UPDATE_DP)
+//                     .then(async report => {
+//                         if (reportSuccess(report)) {
+//                             // wait for air dp upgrade completed
+//                             while(!glasses._reports.has(27661) && common.curGlasses){
+//                                 await sleep(500)
+//                                 dpCurrent = glasses._reports.get(27660) ? glasses._reports.get(27660).status : 0
+//                                 progressInDp(dpCurrent)
+//                             }
             
-                            return glasses._reports.get(27661) ? glasses._reports.get(27661).status == 0 : false
-                        }
+//                             return glasses._reports.get(27661) ? glasses._reports.get(27661).status == 0 : false
+//                         }
             
-                        return false
-                    });
-            }
-        });
+//                         return false
+//                     });
+//             }
+//         });
 
-}
-
-
-async function sendFirmwareInMcu(bootDevice, data) {
-
-    let ofs = 0;
-    const firstPackLen = 24;
-    const fwLen = data.byteLength;
+// }
 
 
+// async function sendFirmwareInMcu(bootDevice, data) {
+
+//     let ofs = 0;
+//     const firstPackLen = 24;
+//     const fwLen = data.byteLength;
 
 
-    let report = await bootDevice.sendReportTimeout(
-        Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_START,
-        data.slice(ofs, ofs + firstPackLen));
-    if (!reportSuccess(report)) {
-        console.error('send fw data failed');
-        return false;
-    }
-    ofs += firstPackLen;
-
-    while (ofs < fwLen) {
-        progress(ofs, fwLen)
-        if ((ofs + 42) > fwLen) {
-            report = await bootDevice.sendReportTimeout(
-                Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_TRANSMIT,
-                data.slice(ofs, fwLen));
-            if (!reportSuccess(report)) {
-                console.error('send fw data failed');
-                return false;
-            }
-        }
-        report = await bootDevice.sendReportTimeout(
-            Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_TRANSMIT,
-            data.slice(ofs, ofs + 42));
-
-        if (!reportSuccess(report)) {
-            console.error('send fw data failed');
-            return false;
-        }
-        ofs += 42;
-    }
-
-    /* send finish */
-    report = await bootDevice.sendReportTimeout(Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_FINISH);
-    // if (!reportSuccess(report)) {
-    //     console.error('send fw data failed');
-    //     return false;
-    // }
-    /* jump to app */
-    report = await bootDevice.sendReportTimeout(Protocol.MESSAGES.W_BOOT_JUMP_TO_APP);
-    // if (!reportSuccess(report)) {
-    //     console.error('send fw data failed');
-    //     return false;
-    // }
-
-    // Send the command to upgrade the DP
-    // report = await bootDevice.sendReportTimeout(Protocol.MESSAGES.W_UPDATE_DP);
 
 
-    current = 0
-    total = 0
-    return true;
+//     let report = await bootDevice.sendReportTimeout(
+//         Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_START,
+//         data.slice(ofs, ofs + firstPackLen));
+//     if (!reportSuccess(report)) {
+//         console.error('send fw data failed');
+//         return false;
+//     }
+//     ofs += firstPackLen;
+
+//     while (ofs < fwLen) {
+//         progress(ofs, fwLen)
+//         if ((ofs + 42) > fwLen) {
+//             report = await bootDevice.sendReportTimeout(
+//                 Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_TRANSMIT,
+//                 data.slice(ofs, fwLen));
+//             if (!reportSuccess(report)) {
+//                 console.error('send fw data failed');
+//                 return false;
+//             }
+//         }
+//         report = await bootDevice.sendReportTimeout(
+//             Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_TRANSMIT,
+//             data.slice(ofs, ofs + 42));
+
+//         if (!reportSuccess(report)) {
+//             console.error('send fw data failed');
+//             return false;
+//         }
+//         ofs += 42;
+//     }
+
+//     /* send finish */
+//     report = await bootDevice.sendReportTimeout(Protocol.MESSAGES.W_UPDATE_MCU_APP_FW_FINISH);
+//     // if (!reportSuccess(report)) {
+//     //     console.error('send fw data failed');
+//     //     return false;
+//     // }
+//     /* jump to app */
+//     report = await bootDevice.sendReportTimeout(Protocol.MESSAGES.W_BOOT_JUMP_TO_APP);
+//     // if (!reportSuccess(report)) {
+//     //     console.error('send fw data failed');
+//     //     return false;
+//     // }
+
+//     // Send the command to upgrade the DP
+//     // report = await bootDevice.sendReportTimeout(Protocol.MESSAGES.W_UPDATE_DP);
 
 
-}
+//     current = 0
+//     total = 0
+//     return true;
 
 
+// }
+
+/*
 async function sendFirmwareInDsp(glasses, data) {
 
     let ofs = 0;
@@ -441,7 +441,7 @@ async function sendFirmwareInDsp(glasses, data) {
         }
     }
 
-    /* send finish */
+    /* send finish *-/
     report = await glasses.sendReportTimeout(Protocol.MESSAGES.W_UPDATE_DSP_APP_FW_FINISH);
     // if (!reportSuccess(report)) {
     //     console.error('send fw data failed');
@@ -449,7 +449,7 @@ async function sendFirmwareInDsp(glasses, data) {
     // }
     // dsp write bin ==> first 100%
     progress(ofs,fwLen)
-    /* Check whether the upgrade is complete */
+    /* Check whether the upgrade is complete *-/
     // air DSP judge for flash&boot
     // 删除之前刷新boot的过程，dsp重新刷新
     glasses._reports.delete(27664)
@@ -487,6 +487,7 @@ async function sendFirmwareInDsp(glasses, data) {
 
 
 }
+*/
 
 // Delay synchronization program execution
 function sleep(delay) {
@@ -514,10 +515,7 @@ export async function startIMU() {
         return Promise.reject('no device connected')
     }
 
-    // kick off polling
-    glasses.startIMUPolling();
-
-    return glasses.sendReportTimeout(Protocol.MESSAGES.W_TOGGLE_IMU, [0x1])
+    return glasses.sendReportTimeout(0x0, Protocol.MAGIC_PAYLOAD)
         .then(report => {
             console.warn('startIMU -> report',report);
             if (reportSuccess(report)){

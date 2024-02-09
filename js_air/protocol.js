@@ -7,75 +7,27 @@ const CRC_OFS = 1;
 const TS_OFS = 7;
 const RESERVED_OFS = 17;
 
+// send to device 3 to enable IMU tracking reporting
+export const MAGIC_PAYLOAD = new Uint8Array([0x00, 0xaa, 0xc5, 0xd1, 0x21, 0x42, 0x04, 0x00, 0x19, 0x01]);
+
 
 export const NREAL_VENDOR_ID = 0x3318;
 export const BOOT_PRODUCT_ID = 0x0423;
-export const IMU_TIMEOUT = 250;
+export const IMU_RATE = 1000; // 1KHz
 
-export const ERRORS = {
-    DEVICE3_ERROR_NO_ERROR: 0,
-	DEVICE3_ERROR_NO_DEVICE: 1,
-	DEVICE3_ERROR_NO_HANDLE: 2,
-	DEVICE3_ERROR_NO_ALLOCATION: 3,
-	DEVICE3_ERROR_WRONG_SIZE: 4,
-	DEVICE3_ERROR_FILE_NOT_OPEN: 5,
-	DEVICE3_ERROR_FILE_NOT_CLOSED: 6,
-	DEVICE3_ERROR_LOADING_FAILED: 7,
-	DEVICE3_ERROR_SAVING_FAILED: 8,
-	DEVICE3_ERROR_UNPLUGGED: 9,
-	DEVICE3_ERROR_UNEXPECTED: 10,
-	DEVICE3_ERROR_WRONG_SIGNATURE: 11,
-	DEVICE3_ERROR_INVALID_VALUE: 12,
-	DEVICE3_ERROR_NOT_INITIALIZED: 13,
-	DEVICE3_ERROR_PAYLOAD_FAILED: 14,
-	DEVICE3_ERROR_UNKNOWN: 15,
-}
+// based on 24bit signed int w/ FSR = +/-2000 dps, datasheet option
+export const GYRO_SCALAR = (1.0 / 8388608.0 * 2000.0)
 
-class Device3Packet {
-    /*
-    uint8_t signature [2];
-	uint8_t temperature [2];
-	uint64_t timestamp;
-	uint8_t angular_multiplier [2];
-	uint8_t angular_divisor [4];
-	uint8_t angular_velocity_x [3];
-	uint8_t angular_velocity_y [3];
-	uint8_t angular_velocity_z [3];
-	uint8_t acceleration_multiplier [2];
-	uint8_t acceleration_divisor [4];
-	uint8_t acceleration_x [3];
-	uint8_t acceleration_y [3];
-	uint8_t acceleration_z [3];
-	uint8_t magnetic_multiplier [2];
-	uint8_t magnetic_divisor [4];
-	uint8_t magnetic_x [2];
-	uint8_t magnetic_y [2];
-	uint8_t magnetic_z [2];
-	uint32_t checksum;
-	uint8_t _padding [6];
-    */
-    constructor() {
-        this.signature = new Uint8Array(2);
-        this.temperature = new Uint8Array(2);
-        this.timestamp = new Uint8Array(8);
-        this.angular_multiplier = new Uint8Array(2);
-        this.angular_divisor = new Uint8Array(4);
-        this.angular_velocity_x = new Uint8Array(3);
-        this.angular_velocity_y = new Uint8Array(3);
-        this.angular_velocity_z = new Uint8Array(3);
-        this.acceleration_multiplier = new Uint8Array(2);
-        this.acceleration_divisor = new Uint8Array(4);
-        this.acceleration_x = new Uint8Array(3);
-        this.acceleration_y = new Uint8Array(3);
-        this.acceleration_z = new Uint8Array(3);
-        this.magnetic_multiplier = new Uint8Array(2);
-        this.magnetic_divisor = new Uint8Array(4);
-        this.magnetic_x = new Uint8Array(2);
-        this.magnetic_y = new Uint8Array(2);
-        this.magnetic_z = new Uint8Array(2);
-        this.checksum = new Uint8Array(4);
-        this._padding = new Uint8Array(6);
-    }
+// based on 24bit signed int w/ FSR = +/-16 g, datasheet option
+export const ACCEL_SCALAR = (1.0 / 8388608.0 * 16.0)
+
+// ticks are in nanoseconds, 1000 Hz packets
+// #define TICK_LEN (1.0f / 1E9f)
+
+class AirSample {
+    tick;
+    ang_vel; // 3
+    accel; // 3
 }
 
 export const MESSAGES = {
@@ -88,8 +40,8 @@ export const MESSAGES = {
     W_ACTIVATION_TIME: 0x2A,//Write activation time
     W_SLEEP_TIME: 0x1E,//Write unsleep time
 
-    R_IMU_DATA: 0x80,//IMU data
-    UNKNOWN_40: 0x40,//Unknown
+    // R_IMU_DATA: 0x80,//IMU data
+    // UNKNOWN_40: 0x40,//Unknown
 
     W_TOGGLE_IMU: 0x19, 
     W_CANCEL_ACTIVATION: 0x19,

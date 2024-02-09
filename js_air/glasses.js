@@ -132,9 +132,6 @@ window.logPackets = () => {
 
 export default class Glasses extends EventTarget {
 
-    /* RepeatingDeviceReportPoll */
-    imu_poller_instance = null;
-
     constructor(device) {
         console.log('constructing');
         super();
@@ -142,24 +139,6 @@ export default class Glasses extends EventTarget {
         this._interestMsg = [];
         this._reports = new Map();
         this._captures = [];
-
-        // creates it, but doesn't start it...
-        this.imu_poller_instance = new RepeatingDeviceReportPoll({
-            interval: 100,
-            callback: async ()=>{
-                this.sendReportTimeout(Protocol.MESSAGES.R_IMU_DATA, [0x40]).then((report)=>{
-                    if(report){
-                        console.log('got report',report)
-                    }else{
-                        console.log('no report')
-                    }
-                }).catch((e)=>{
-                    console.error('error sending report',e)
-                }).finally(()=>{
-                    //console.log('finally')
-                });
-            }
-        });
 
         // set input listener
         device.oninputreport = this._handleInputReport.bind(this);
@@ -465,7 +444,7 @@ export default class Glasses extends EventTarget {
 
 }
 
-class RepeatingDeviceReportPoll {
+class StartableEndableRepeatingCallback {
     timer = null;
     constructor(opts){
         opts = opts || {};
