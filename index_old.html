@@ -88,10 +88,10 @@
     <div>current brightness: <span class="current-brightness">?</span></div>
 
     <hr/>
-    <div id="imu-labels"></div>
-    <div id="imu"></div>
-    <div id="imu-bars"></div>
-    <div id="sparklines"></div>
+    <!-- <div id="imu-labels"></div> -->
+    <!-- <div id="imu"></div> -->
+    <!-- <div id="imu-bars"></div> -->
+    <!-- <div id="sparklines"></div> -->
 	
 
     <hr/>
@@ -486,7 +486,7 @@
     window.sparkline_elements = [];
 
     window.onload = async () => {
-
+        /*
         for(var i = 0; i<41; i++){
             let child = document.createElement('div');
             child.classList.add('bar');
@@ -524,6 +524,7 @@
 
             document.getElementById('sparklines').append(_sl_wrapper)
         }
+        */
 
         if (!Manager?.hidSupported()) {
             document.getElementById('noSupportHid').style.display = "block";
