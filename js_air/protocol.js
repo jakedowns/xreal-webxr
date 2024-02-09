@@ -22,6 +22,9 @@ export const MESSAGES = {
     W_ACTIVATION_TIME: 0x2A,//Write activation time
     W_SLEEP_TIME: 0x1E,//Write unsleep time
 
+    R_IMU_DATA: 0x80,//IMU data
+    UNKNOWN_40: 0x40,//Unknown
+
     W_TOGGLE_IMU: 0x19, 
     W_CANCEL_ACTIVATION: 0x19,
 

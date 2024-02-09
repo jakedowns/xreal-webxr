@@ -513,7 +513,11 @@ export async function startIMU() {
     if(!glasses){
         return Promise.reject('no device connected')
     }
-    return glasses.sendReportTimeout(Protocol.MESSAGES.W_TOGGLE_IMU, [1])
+
+    // kick off polling
+    glasses.startIMUPolling();
+
+    return glasses.sendReportTimeout(Protocol.MESSAGES.W_TOGGLE_IMU, [0x1])
         .then(report => {
             console.warn('startIMU -> report',report);
             if (reportSuccess(report)){
@@ -529,7 +533,7 @@ export async function stopIMU() {
         return 'no device connected'
     }
     // arg 2: 0 is what turns "off" the stream
-    return glasses.sendReportTimeout(Protocol.MESSAGES.W_TOGGLE_IMU, [0])
+    return glasses.sendReportTimeout(Protocol.MESSAGES.W_TOGGLE_IMU, [0x0])
         .then(report => {
             console.warn('stopIMU -> report',report);
             if (reportSuccess(report)){
