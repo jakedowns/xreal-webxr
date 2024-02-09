@@ -12,6 +12,72 @@ export const NREAL_VENDOR_ID = 0x3318;
 export const BOOT_PRODUCT_ID = 0x0423;
 export const IMU_TIMEOUT = 250;
 
+export const ERRORS = {
+    DEVICE3_ERROR_NO_ERROR: 0,
+	DEVICE3_ERROR_NO_DEVICE: 1,
+	DEVICE3_ERROR_NO_HANDLE: 2,
+	DEVICE3_ERROR_NO_ALLOCATION: 3,
+	DEVICE3_ERROR_WRONG_SIZE: 4,
+	DEVICE3_ERROR_FILE_NOT_OPEN: 5,
+	DEVICE3_ERROR_FILE_NOT_CLOSED: 6,
+	DEVICE3_ERROR_LOADING_FAILED: 7,
+	DEVICE3_ERROR_SAVING_FAILED: 8,
+	DEVICE3_ERROR_UNPLUGGED: 9,
+	DEVICE3_ERROR_UNEXPECTED: 10,
+	DEVICE3_ERROR_WRONG_SIGNATURE: 11,
+	DEVICE3_ERROR_INVALID_VALUE: 12,
+	DEVICE3_ERROR_NOT_INITIALIZED: 13,
+	DEVICE3_ERROR_PAYLOAD_FAILED: 14,
+	DEVICE3_ERROR_UNKNOWN: 15,
+}
+
+class Device3Packet {
+    /*
+    uint8_t signature [2];
+	uint8_t temperature [2];
+	uint64_t timestamp;
+	uint8_t angular_multiplier [2];
+	uint8_t angular_divisor [4];
+	uint8_t angular_velocity_x [3];
+	uint8_t angular_velocity_y [3];
+	uint8_t angular_velocity_z [3];
+	uint8_t acceleration_multiplier [2];
+	uint8_t acceleration_divisor [4];
+	uint8_t acceleration_x [3];
+	uint8_t acceleration_y [3];
+	uint8_t acceleration_z [3];
+	uint8_t magnetic_multiplier [2];
+	uint8_t magnetic_divisor [4];
+	uint8_t magnetic_x [2];
+	uint8_t magnetic_y [2];
+	uint8_t magnetic_z [2];
+	uint32_t checksum;
+	uint8_t _padding [6];
+    */
+    constructor() {
+        this.signature = new Uint8Array(2);
+        this.temperature = new Uint8Array(2);
+        this.timestamp = new Uint8Array(8);
+        this.angular_multiplier = new Uint8Array(2);
+        this.angular_divisor = new Uint8Array(4);
+        this.angular_velocity_x = new Uint8Array(3);
+        this.angular_velocity_y = new Uint8Array(3);
+        this.angular_velocity_z = new Uint8Array(3);
+        this.acceleration_multiplier = new Uint8Array(2);
+        this.acceleration_divisor = new Uint8Array(4);
+        this.acceleration_x = new Uint8Array(3);
+        this.acceleration_y = new Uint8Array(3);
+        this.acceleration_z = new Uint8Array(3);
+        this.magnetic_multiplier = new Uint8Array(2);
+        this.magnetic_divisor = new Uint8Array(4);
+        this.magnetic_x = new Uint8Array(2);
+        this.magnetic_y = new Uint8Array(2);
+        this.magnetic_z = new Uint8Array(2);
+        this.checksum = new Uint8Array(4);
+        this._padding = new Uint8Array(6);
+    }
+}
+
 export const MESSAGES = {
     
     R_MCU_APP_FW_VERSION: 0x26,//MCU APP FW version.
