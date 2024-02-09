@@ -146,8 +146,8 @@ export default class Glasses extends EventTarget {
         // creates it, but doesn't start it...
         this.imu_poller_instance = new RepeatingDeviceReportPoll({
             interval: 100,
-            callback: ()=>{
-                this.sendReport(Protocol.MESSAGES.R_IMU_DATA).then((report)=>{
+            callback: async ()=>{
+                this.sendReportTimeout(Protocol.MESSAGES.R_IMU_DATA, [0x40]).then((report)=>{
                     if(report){
                         console.log('got report',report)
                     }else{
