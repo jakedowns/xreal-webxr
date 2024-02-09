@@ -11,12 +11,13 @@ based on combined effort of:
 ### Community Open Source Xreal Drivers:
 
 - [Windows](https://github.com/MSmithDev/AirAPI_Windows) - .dll
-- [Android](https://github.com/SARankDirector-Minecraft/XR-android-driver) - .so?
-- [Linux](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver) - .so?
-- [Mac](https://gitlab.com/DanBurkhardt/nrealAirLinuxDriver/-/tree/main) - .dylib?
+- [Android](https://github.com/SARankDirector-Minecraft/XR-android-driver) - .aar
+- [Linux](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver) - .so
+- [Mac](https://gitlab.com/DanBurkhardt/nrealAirLinuxDriver/-/tree/main) - .dylib
 - [WebXR](https://github.com/jakedowns/xreal-webxr) - WebXR Bindings and Test Utilities / Getting-Started Example(s) Basis for NPM package
 - [Rust](https://github.com/badicsalex/ar-drivers-rs) - Cross-Platform Rust Library
-- [XRLinux](https://github.com/wheaney/XRLinuxDriver) - Linux, Steam Deck - Decky Plugin
+- [XR Gaming Decky Plugin](https://github.com/wheaney/decky-XRGaming) - XR Gaming Decky Plugin
+- [XRLinux](https://github.com/wheaney/XRLinuxDriver)
 - [OpenVR-xrealAirGlassesHMD](https://github.com/wheaney/OpenVR-xrealAirGlassesHMD) - OpenVR driver for xReal Air Glasses as a HMD
 
 ### Projects using Open Source Xreal Drivers
