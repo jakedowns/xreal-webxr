@@ -467,13 +467,14 @@ export default class Glasses extends EventTarget {
 
 class RepeatingDeviceReportPoll {
     timer = null;
-    constructor(opts = {}){
+    constructor(opts){
         opts = opts || {};
         opts = {
             interval: 100,
             callback: ()=>{}, // this is the function that will be called
             ...opts
         }
+        this.opts = opts;
         
     }
 
@@ -483,9 +484,9 @@ class RepeatingDeviceReportPoll {
             if(this.ended){
                 clearInterval(this.timer)
             }else{
-                opts.callback()
+                this.opts.callback()
             }
-        },opts.interval)
+        },this.opts.interval)
     }
 
     end(){
