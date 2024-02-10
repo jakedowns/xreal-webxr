@@ -9,7 +9,7 @@ work in progress; webxr support for xreal devices
 🙌 🥽 💪 based on combined effort of the Xreal Open Source Community:
 
 ### Projects using Open Source Xreal Drivers
-
+- [AirDesktopViewer](https://github.com/MSmithDev/AirDesktopViewer) 🖼️ Windows
 - [OpenGL demo program](https://github.com/abls/real-air)
 - [kassandra](https://www.youtube.com/watch?v=7pH2VvUTZIQ) 🍎 Mac
 - [breezy desktop](https://github.com/wheaney/breezy-desktop) 🐧 Linux
