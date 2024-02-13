@@ -320,7 +320,7 @@
     //     });
     // }
 
-    function connect() {
+    window.connect = function() {
         Common.connectDevice().then(async glasses => {
             if (glasses) {
                 document.getElementById('startIMU').style.display = 'block'
@@ -337,6 +337,8 @@
             // document.getElementById('sn').innerHTML = getSN()
             // document.getElementById('version').innerText = '版本号' + firmwareMcu()
             setOutput('glasses : ' + glasses.toString());
+        }).catch((err) => {
+            setOutput('glasses : ' + err.toString());
         });
     }
 

@@ -29,6 +29,11 @@ work in progress; webxr support for xreal devices
 - [XR Linux Driver](https://github.com/wheaney/XRLinuxDriver)
 - [OpenVR-xrealAirGlassesHMD](https://github.com/wheaney/OpenVR-xrealAirGlassesHMD)
 
+### Community Resources
+- [AR glasses USB protocols: the Good, the Bad and the Ugly](https://voidcomputing.hu/blog/good-bad-ugly) Void Computing AR API Write Up
+- [AHRS Drift Analysis - Notebook Gist](https://gist.github.com/CGamesPlay/b3ea7740ea8715d19e89f5511491519f)
+- [AHRS Drift Overview - Youtube](https://www.youtube.com/watch?v=Hvd9qVIusB0)
+
 ### Utilities
 
 - 🪞 [Unofficial Firmware Archive Mirror](https://air.msmithdev.com/)

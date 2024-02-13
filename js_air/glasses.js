@@ -343,7 +343,7 @@ export default class Glasses extends EventTarget {
                     return out
                 }).join(' ');
 
-                document.getElementById('imu').innerHTML = stringified
+                //document.getElementById('imu').innerHTML = stringified
                 
                 // debugger;
                 if(current < stop_at){
