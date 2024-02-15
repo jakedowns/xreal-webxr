@@ -7,13 +7,43 @@ const CRC_OFS = 1;
 const TS_OFS = 7;
 const RESERVED_OFS = 17;
 
-// send to device 3 to enable IMU tracking reporting
-export const MAGIC_PAYLOAD = new Uint8Array([0x00, 0xaa, 0xc5, 0xd1, 0x21, 0x42, 0x04, 0x00, 0x19, 0x01]);
+// send to device 3 to enable IMU tracking reporting (removed first byte 0x00)
+export const MAGIC_PAYLOAD = new Uint8Array([0xaa, 0xc5, 0xd1, 0x21, 0x42, 0x04, 0x00, 0x19, 0x01]);
+
+class CliDisplayMode {
+    static SameOnBoth = "2d";
+    static Stereo = "3d";
+    static HalfSBS = "halfsbs";
+    static HighRefreshRate = "high-refresh-rate-2d";
+    static HighRefreshRateSBS = "high-refresh-rate-3d";
+
+    static getDisplayModeByte(displayMode) {
+        switch (displayMode) {
+            case CliDisplayMode.SameOnBoth:
+                return 1;
+            case CliDisplayMode.Stereo:
+                return 3;
+            case CliDisplayMode.HalfSBS:
+                return 8;
+            case CliDisplayMode.HighRefreshRate:
+                return 11;
+            case CliDisplayMode.HighRefreshRateSBS:
+                return 9;
+            default:
+                throw new Error("Invalid display mode");
+        }
+    }
+}
+
+// Example usage
+let displayMode = CliDisplayMode.Stereo; // This can be dynamically set
+let displayModeByte = CliDisplayMode.getDisplayModeByte(displayMode);
+console.log(displayModeByte);
 
 
 export const NREAL_VENDOR_ID = 0x3318;
 export const BOOT_PRODUCT_ID = 0x0423;
-export const IMU_RATE = 1000; // 1KHz
+//export const IMU_RATE = 1000; // 1KHz
 
 // based on 24bit signed int w/ FSR = +/-2000 dps, datasheet option
 export const GYRO_SCALAR = (1.0 / 8388608.0 * 2000.0)
@@ -31,7 +61,7 @@ class AirSample {
 }
 
 export const MESSAGES = {
-    
+
     R_MCU_APP_FW_VERSION: 0x26,//MCU APP FW version.
     R_GLASSID: 0x15,//MCU APP FW version.
     // R_DSP_APP_FW_VERSION: 0x21,//DSP APP FW version.
@@ -43,7 +73,7 @@ export const MESSAGES = {
     // R_IMU_DATA: 0x80,//IMU data
     // UNKNOWN_40: 0x40,//Unknown
 
-    W_TOGGLE_IMU: 0x19, 
+    W_TOGGLE_IMU: 0x19,
     W_CANCEL_ACTIVATION: 0x19,
 
     // R_IS_NEED_UPGRADE_DSP_FW: 0x49,//Check whether the DSP needs to be upgraded.
@@ -63,7 +93,7 @@ export const MESSAGES = {
     W_UPDATE_MCU_APP_FW_FINISH: 0x41,	//(Implemented in Boot)
     W_BOOT_JUMP_TO_APP: 0x42,	//(Implemented in Boot)
     W_MCU_APP_JUMP_TO_BOOT: 0x44,
-    R_DP7911_FW_IS_UPDATE:0x3C,
+    R_DP7911_FW_IS_UPDATE: 0x3C,
     W_UPDATE_DP: 0x3D,
 
 
@@ -85,7 +115,7 @@ export const MESSAGES = {
     P_UKNOWN_HEARTBEAT_2: 0x6c12
 };
 
-export function keyForHex(hex){
+export function keyForHex(hex) {
     for (let key in MESSAGES) {
         if (MESSAGES[key] == hex) {
             return key;
@@ -95,15 +125,15 @@ export function keyForHex(hex){
 }
 
 
-export function listKnownCommands(){
+export function listKnownCommands() {
     let data = [];
-    Object.keys(MESSAGES).map((key)=>{
-        
+    Object.keys(MESSAGES).map((key) => {
+
 
         data.push({
             key,
-            hex:'0x'+MESSAGES[key].toString(16),
-            dec:MESSAGES[key]
+            hex: '0x' + MESSAGES[key].toString(16),
+            dec: MESSAGES[key]
         })
     })
 
@@ -230,7 +260,7 @@ function get_status_byte(response) {
 window.unparsed = [];
 
 // 4-bytes to 32-bit float
-function four_bytes_to_float(byte_array){
+function four_bytes_to_float(byte_array) {
     var data = byte_array; // [64, 226, 157, 10];
 
     // Create a buffer
@@ -258,11 +288,11 @@ export function parse_rsp(rsp) {
         payload: new Uint8Array()
     };
 
-    if(rsp[0] !== HEAD){
+    if (rsp[0] !== HEAD) {
         // console.warn('HEAD mismatch', rsp[0]);
         // console.warn([...rsp].map(x => x.toString(16).padStart(2,'0')).join(' '));
-        if(window.unparsed.length<1000){
-            window.unparsed.push([...rsp].map(x => x.toString(16).padStart(2,'0')).join(','))
+        if (window.unparsed.length < 1000) {
+            window.unparsed.push([...rsp].map(x => x.toString(16).padStart(2, '0')).join(','))
 
             // extract 16 32-bit,4-byte floats from 64 bytes
             // NOPE
@@ -360,9 +390,9 @@ export function brightBytes2Int(bright_byte_arr) {
 export function bytes2Time(bytes) {
     let time = '';
     for (let i = bytes.byteLength - 1; i >= 0; i--) {
-        if(i > 3){
+        if (i > 3) {
             time += bytes[i].toString(2)
-        }else{
+        } else {
             time += bytes[i].toString(2)
             // time += bytes[i] << (i * 8);
         }
@@ -370,18 +400,18 @@ export function bytes2Time(bytes) {
     return time;
 };
 
-export function hex2Decimal(byte){
+export function hex2Decimal(byte) {
     return parseInt(byte, 16);
 }
 
-export function time2Bytes(timeStamp){
+export function time2Bytes(timeStamp) {
     let arr = new Uint8Array(8)
     let len = Math.floor((Number(timeStamp).toString(2).length) / 8)
-    let longN = parseInt(Number(timeStamp).toString(2).substring(0,Number(timeStamp).toString(2).length - 32), 2)
+    let longN = parseInt(Number(timeStamp).toString(2).substring(0, Number(timeStamp).toString(2).length - 32), 2)
     for (let i = len; i >= 0; i--) {
-        if(i > 3){
+        if (i > 3) {
             arr[i] = ((longN >>> ((i - 4) * 8)) & 0xFF);
-        }else{
+        } else {
             arr[i] = ((timeStamp >>> (i * 8)) & 0xFF);
         }
     }

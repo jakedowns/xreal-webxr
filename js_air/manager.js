@@ -515,7 +515,7 @@ export async function startIMU() {
         return Promise.reject('no device connected')
     }
 
-    return glasses.sendReportTimeout(0x0, Protocol.MAGIC_PAYLOAD)
+    return glasses.sendReportTimeout(0x00, Protocol.MAGIC_PAYLOAD)
         .then(report => {
             console.warn('startIMU -> report',report);
             if (reportSuccess(report)){
