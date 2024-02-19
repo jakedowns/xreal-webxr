@@ -128,7 +128,17 @@ export async function connectDevice() {
     if (glasses) {
         return glasses;
     }
-    return await requestDevice();
+    return await requestDevice({
+        filters: [{
+            vendorId: 0x0486, // ? ASUS Computers Inc. ?
+        }, {
+            vendorId: 0x0483, // STMicroelectronics ?
+        }, {
+            vendorId: 0x0482, // Kyocera Corporation ?
+        }, {
+            vendorId: 0x3318, // Gleaming Reality (Wuxi) Technology Co., LTD ?
+        }]
+    });
 }
 
 export async function disconnectDevice() {

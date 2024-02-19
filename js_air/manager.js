@@ -134,6 +134,39 @@ export async function getFirmwareVersionInDsp() {
         });
 }
 
+export async function listEndpoints(device) {
+    await device.open();
+
+    // Listing available configurations valid for selection
+    let configurations = device.configurations;
+    for (let i = 0; i < configurations.length; i++) {
+        console.log(`Configuration ${i}: ${configurations[i].configurationValue}`);
+        
+        try{
+            // Select the current configuration
+            // Assuming the configuration is 0-based
+            await device.selectConfiguration(i+1);
+
+            // Iterate over all available interfaces for the current configuration and claim them
+            for (let j = 0; j < device.configuration.interfaces.length; j++) {
+                try{
+                    await device.claimInterface(j);
+                    device.configuration.interfaces[j].alternates.forEach((alternate) => {
+                        console.log(`Configuration ${i}, iface ${j} Alternate ${alternate.alternateSetting}`);
+                        alternate.endpoints.forEach((endpoint) => {
+                            console.log(`Endpoint ${endpoint.endpointNumber} Direction ${endpoint.direction}`);
+                        });
+                    });
+                }catch(e){
+                    console.error(e);
+                }
+            }
+        }catch(e){
+            console.error(e)
+        }
+    }
+}
+
 // Parameters required for the progress bar
 // function progress(cur, all) {
 //     current = cur
@@ -183,8 +216,19 @@ async function waitBootDevice() {
     }
     // await requestDevice()
 
+    // await navigator.hid.requestDevice({
+    //     filters: [{ vendorId: Protocol.NREAL_VENDOR_ID, productId: Protocol.NREAL_BOOT_PRODUCT_ID }]
+    // });
     await navigator.hid.requestDevice({
-        filters: [{ vendorId: Protocol.NREAL_VENDOR_ID, productId: Protocol.NREAL_BOOT_PRODUCT_ID }]
+        filters: [{
+            vendorId: 0x0486, // ? ASUS Computers Inc. ?
+        }, {
+            vendorId: 0x0483, // STMicroelectronics ?
+        }, {
+            vendorId: 0x0482, // Kyocera Corporation ?
+        }, {
+            vendorId: 0x3318, // Gleaming Reality (Wuxi) Technology Co., LTD ?
+        }]
     });
     const time = new Date().getTime();
     while ((new Date().getTime() - time) < 2000) {
@@ -489,6 +533,8 @@ async function sendFirmwareInDsp(glasses, data) {
 }
 */
 
+
+
 // Delay synchronization program execution
 function sleep(delay) {
     return new Promise((resolve) => setTimeout(resolve, delay))
@@ -542,6 +588,32 @@ export async function stopIMU() {
         })
 }
 
+export async function getDisplayMode(){
+    let glasses = await common.connectDevice();
+    if (!glasses) {
+        return 'not found device';
+    }
+    return glasses.sendReportTimeout(Protocol.MESSAGES.R_DISPLAY_MODE)
+        .then(report => {
+            if (reportSuccess(report)) {
+                return report.payload[0];
+            }
+        });
+}
+
+export async function setDisplayMode(mode){
+    let glasses = await common.connectDevice();
+    if (!glasses) {
+        return 'not found device';
+    }
+    return glasses.sendReportTimeout(Protocol.MESSAGES.W_DISPLAY_MODE, [mode])
+        .then(report => {
+            if (reportSuccess(report)) {
+                return report.payload[0];
+            }
+        });
+}
+
 /** read air glassess Brightness */
 export async function getBrightness() {
     let glasses = await common.connectDevice();
@@ -549,7 +621,7 @@ export async function getBrightness() {
         return 'not found device';
     }
     // what's the chance the getBrightness is the same as setBrightness?
-    return glasses.sendReportTimeout(Protocol.MESSAGES.W_BRIGHTNESS)
+    return glasses.sendReportTimeout(Protocol.MESSAGES.R_BRIGHTNESS)
     .then(report => {
             if (reportSuccess(report)) {
                 return report.payload;

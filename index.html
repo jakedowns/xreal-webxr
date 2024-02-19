@@ -51,7 +51,17 @@
             // Request USB device
             let device;
             try {
-                device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2341 }] });
+                device = await navigator.usb.requestDevice({
+                    filters: [{
+                        vendorId: 0x0486, // ? ASUS Computers Inc. ?
+                    }, {
+                        vendorId: 0x0483, // STMicroelectronics ?
+                    }, {
+                        vendorId: 0x0482, // Kyocera Corporation ?
+                    }, {
+                        vendorId: 0x3318, // Gleaming Reality (Wuxi) Technology Co., LTD ?
+                    }]
+                });
             } catch (err) {
                 console.error("No device was selected", err);
             }

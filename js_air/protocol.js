@@ -73,6 +73,12 @@ export const MESSAGES = {
     // R_IMU_DATA: 0x80,//IMU data
     // UNKNOWN_40: 0x40,//Unknown
 
+    R_DISPLAY_MODE: 0x7,//Read display mode
+    W_DISPLAY_MODE: 0x08,//Write display mode
+
+    R_BRIGHTNESS: 0x0,//Read brightness
+    W_BRIGHTNESS: 0x0,//Write brightness
+
     W_TOGGLE_IMU: 0x19,
     W_CANCEL_ACTIVATION: 0x19,
 

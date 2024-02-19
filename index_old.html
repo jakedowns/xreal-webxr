@@ -71,6 +71,9 @@
 </head>
 <body>
     <div id="noSupportHid"></div>
+    <div id="listEndpoints">
+        <button onclick="listEndpoints()">list endpoints</button>
+    </div>
 	<div id="connect"><button>connect</button></div>
     <div id="disconnect" onclick="disconnectDevices()"><button>disconnect</button></div>
     <div id="startIMU" style="display: none;" onclick="startIMU()"><button>start headtracking</button></div>
@@ -320,8 +323,11 @@
     //     });
     // }
 
+    window.connected_devices = [];
+
     window.connect = function() {
         Common.connectDevice().then(async glasses => {
+            connected_devices.push(glasses);
             if (glasses) {
                 document.getElementById('startIMU').style.display = 'block'
                 document.getElementById('hadConnect').style.display = 'block'
@@ -448,6 +454,11 @@
         });
     }
 
+    window.listEndpoints = () => {
+       // Manager.listEndpoints(connected_devices[0]);
+       window.listUsbEndpoints();
+    }
+
     window.disconnectDevices = () => {
         window.curGlassesArray.map(g=>{
             g._device.close();
@@ -457,31 +468,44 @@
 
     window.endpoints = [];
 
-    window.listUsbEndpoints = () => {
+    window.listUsbEndpoints = async () => {
         window.endpoints = [];
         // list usb endpoints
-        navigator.usb.requestDevice({filters:[]}).then((device)=>{
-            window.usb_device = device;
+        let device = await navigator.usb.requestDevice({
+            filters: [{
+                vendorId: 0x0486, // ? ASUS Computers Inc. ?
+            }, {
+                vendorId: 0x0483, // STMicroelectronics ?
+            }, {
+                vendorId: 0x0482, // Kyocera Corporation ?
+            }, {
+                vendorId: 0x3318, // Gleaming Reality (Wuxi) Technology Co., LTD ?
+            }]
+        })
+        
+        window.usb_device = device;
 
-            //usb_device.configurations[0].interfaces[1].alternates[1].endpoints[0]
+        //usb_device.configurations[0].interfaces[1].alternates[1].endpoints[0]
 
-            for(let configuration of device.configurations){
+        for(let configuration of device.configurations){
 
-                for(let _interface of configuration.interfaces){
+            for(let _interface of configuration.interfaces){
 
-                    for(let alternate of _interface?.alternates ?? []){
+                for(let alternate of _interface?.alternates ?? []){
 
-                        for(let endpoint of alternate.endpoints){
+                    for(let endpoint of alternate.endpoints){
 
-                            window.endpoints.push(endpoint);
-                        }
+                        window.endpoints.push(endpoint);
                     }
                 }
             }
-
-            console.table(window.endpoints);
-        })
+        }
         
+        console.warn('CONNECTED TO DEVICE: ENDPOINTS:')
+        console.table(window.endpoints);
+
+        // new recursive debug printout:
+        await Manager.listEndpoints(device)
     }
     
 
