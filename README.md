@@ -16,6 +16,8 @@ work in progress; webxr support for xreal devices
 - [cozy desk](https://cozydesk.space/download/) 🍏 Mac
 - [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker/releases) 🖼️ Windows
 - [Monado - xreal support](https://gitlab.freedesktop.org/monado/monado/-/tree/main/src/xrt/drivers/nreal_air) 🐧 Linux + OpenXR
+- https://github.com/3rl-io/spidgets-3dof Web (Linux, Windows, Mac)
+-- https://github.com/3rl-io/headset-utils (rust driver)
 
 ### Xreal Open Source Community Drivers:
 
