@@ -72,6 +72,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0d1117; f
   <span id="status-text"><span class="status-dot disconnected" id="status-dot"></span>Disconnected</span>
   <button id="recenter-btn" disabled title="Reset head orientation to center">&olarr;</button>
   <button id="sbs-btn" style="display:none">SBS 3D</button>
+  <button id="crossview-btn" style="display:none">Crossview</button>
   <button id="connect-btn">Connect</button>
 </div>
 
@@ -292,10 +293,16 @@ function initScene() {
   }
 
   let sbs = false;
+  let crossview = false;
   function toggleSbs() {
     sbs = !sbs;
+    if (!sbs) crossview = false;
     resize();
     return sbs;
+  }
+  function toggleCrossview() {
+    crossview = !crossview;
+    return crossview;
   }
 
   function resize() {
@@ -333,14 +340,16 @@ function initScene() {
     if (sbs) {
       const w = container.clientWidth;
       const h = container.clientHeight;
+      const leftCam = crossview ? cameraR : cameraL;
+      const rightCam = crossview ? cameraL : cameraR;
       renderer.setViewport(0, 0, Math.floor(w / 2), h);
       renderer.setScissor(0, 0, Math.floor(w / 2), h);
       renderer.setScissorTest(true);
-      renderer.render(scene, cameraL);
+      renderer.render(scene, leftCam);
 
       renderer.setViewport(Math.ceil(w / 2), 0, Math.floor(w / 2), h);
       renderer.setScissor(Math.ceil(w / 2), 0, Math.floor(w / 2), h);
-      renderer.render(scene, cameraR);
+      renderer.render(scene, rightCam);
 
       renderer.setScissorTest(false);
     } else {
@@ -350,7 +359,7 @@ function initScene() {
   }
   animate();
 
-  window.__imu3d = { setOrientation, resetOrientation, resize, setSmile, toggleSbs };
+  window.__imu3d = { setOrientation, resetOrientation, resize, setSmile, toggleSbs, toggleCrossview };
 }
 
 try {
@@ -732,6 +741,8 @@ try {
       window.__imu3d.toggleSbs();
       sbsBtn.textContent = 'SBS 3D';
     }
+    const cvBtn = document.getElementById('crossview-btn');
+    if (cvBtn) cvBtn.style.display = 'none';
     imuHistory.length = 0;
     if (window.__imu3d) window.__imu3d.resetOrientation();
     if (window.__imu3d) window.__imu3d.setSmile(false);
@@ -756,6 +767,20 @@ try {
     if (window.__imu3d && window.__imu3d.toggleSbs) {
       const enabled = window.__imu3d.toggleSbs();
       document.getElementById('sbs-btn').textContent = enabled ? 'Mono' : 'SBS 3D';
+      const cvBtn = document.getElementById('crossview-btn');
+      if (enabled) {
+        cvBtn.style.display = '';
+        cvBtn.textContent = 'Crossview';
+      } else {
+        cvBtn.style.display = 'none';
+      }
+    }
+  });
+
+  document.getElementById('crossview-btn').addEventListener('click', () => {
+    if (window.__imu3d && window.__imu3d.toggleCrossview) {
+      const cv = window.__imu3d.toggleCrossview();
+      document.getElementById('crossview-btn').textContent = cv ? 'Parallel' : 'Crossview';
     }
   });
 
