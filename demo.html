@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XREAL Air IMU Demo</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #0d1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #e6edf3; }
+
+#scene-container { position: fixed; inset: 0; z-index: 0; }
+
+#top-bar {
+  position: fixed; top: 12px; right: 12px; z-index: 10;
+  display: flex; align-items: center; gap: 8px;
+}
+#top-bar button, #top-bar .status-dot {
+  font-size: 12px; padding: 6px 12px; border-radius: 6px;
+  border: 1px solid #30363d; background: #161b22; color: #e6edf3;
+  cursor: pointer; white-space: nowrap;
+}
+#top-bar button:hover { background: #21262d; }
+#top-bar button:active { background: #30363d; }
+#top-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+#connect-btn { background: #1a6bc4; border-color: #2188ff; color: #fff; font-weight: 600; }
+#connect-btn:hover { background: #2188ff; }
+#connect-btn:active { background: #005cc5; }
+#connect-btn:disabled { background: #1a6bc4; opacity: 0.4; }
+#status-text { font-size: 12px; color: #8b949e; padding: 6px 0; }
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.status-dot.disconnected { background: #f85149; }
+.status-dot.connected { background: #3fb950; }
+.status-dot.connecting { background: #d29922; }
+
+#graph-overlay {
+  position: fixed; bottom: 12px; right: 12px; z-index: 10;
+  border: 1px solid #30363d; border-radius: 8px; background: #161b22; overflow: hidden;
+  width: 320px;
+}
+#graph-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; font-size: 11px; font-weight: 600; color: #8b949e;
+  cursor: pointer; user-select: none;
+}
+#graph-header:hover { background: #1c2333; }
+#graph-toggle { font-size: 10px; color: #484f58; background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; color: #8b949e; }
+#graph-toggle:hover { background: #21262d; }
+#graph-body { padding: 4px; }
+#gyro-canvas { display: block; width: 100%; height: 100px; background: #0d1117; border-radius: 4px; }
+.graph-legend { display: flex; gap: 12px; font-size: 10px; padding: 3px 6px 4px; }
+.graph-legend .legend-item { display: flex; align-items: center; gap: 3px; }
+.graph-legend .legend-dot { width: 7px; height: 7px; border-radius: 50%; }
+.graph-values { margin-left: auto; font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 10px; color: #484f58; }
+
+#recenter-btn { margin-left: 4px; }
+#recenter-btn svg { display: block; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="scene-container"></div>
+
+<div id="top-bar">
+  <span id="status-text"><span class="status-dot disconnected" id="status-dot"></span>Disconnected</span>
+  <button id="recenter-btn" disabled title="Reset head orientation to center">&olarr;</button>
+  <button id="sbs-btn" style="display:none">SBS 3D</button>
+  <button id="connect-btn">Connect</button>
+</div>
+
+<div id="graph-overlay">
+  <div id="graph-header">
+    <span>Gyroscope &deg;/s</span>
+    <button id="graph-toggle">Hide</button>
+  </div>
+  <div id="graph-body">
+    <canvas id="gyro-canvas"></canvas>
+    <div class="graph-legend">
+      <span class="legend-item"><span class="legend-dot" style="background:#ff6b6b"></span>X</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#51cf66"></span>Y</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#339af0"></span>Z</span>
+      <span class="graph-values" id="gyro-values"></span>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+function initScene() {
+  const container = document.getElementById('scene-container');
+  if (!container) return;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0d1117);
+
+  const IPD = 0.06;
+  const camPos = { x: 0, y: 0.2, z: 2.2 };
+  const camTarget = new THREE.Vector3(0, 0, 0);
+
+  const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 10);
+  camera.position.copy(camTarget).add(new THREE.Vector3(0, camPos.y, camPos.z));
+  camera.lookAt(camTarget);
+
+  const cameraL = new THREE.PerspectiveCamera(40, (container.clientWidth / 2) / container.clientHeight, 0.1, 10);
+  cameraL.position.copy(camTarget).add(new THREE.Vector3(-IPD / 2, camPos.y, camPos.z));
+  cameraL.lookAt(camTarget);
+
+  const cameraR = new THREE.PerspectiveCamera(40, (container.clientWidth / 2) / container.clientHeight, 0.1, 10);
+  cameraR.position.copy(camTarget).add(new THREE.Vector3(IPD / 2, camPos.y, camPos.z));
+  cameraR.lookAt(camTarget);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  container.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0x404070, 0.4));
+  const key = new THREE.DirectionalLight(0xffffff, 2);
+  key.position.set(1.5, 2, 1.5);
+  key.castShadow = true;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0x8888ff, 0.6);
+  fill.position.set(-1, 0.5, -1.5);
+  scene.add(fill);
+  const rim = new THREE.DirectionalLight(0x4488ff, 0.5);
+  rim.position.set(0, -1, -1);
+  scene.add(rim);
+
+  const g = new THREE.Group();
+  scene.add(g);
+
+  const headMat = new THREE.MeshStandardMaterial({ color: 0x8B7D6B, roughness: 0.6, metalness: 0.05 });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.58, 32, 32), headMat);
+  head.scale.set(1, 0.92, 0.85);
+  g.add(head);
+
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xC4A882, roughness: 0.55, metalness: 0 });
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.56, 32, 32), skinMat);
+  face.scale.set(0.95, 0.88, 0.82);
+  face.position.z = 0.02;
+  g.add(face);
+
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.3 });
+  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.2 });
+  const irisMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.3 });
+  function addEye(x) {
+    const w = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 20), whiteMat);
+    w.position.set(x, 0.12, 0.54);
+    g.add(w);
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.065, 20, 20), irisMat);
+    iris.position.set(x, 0.13, 0.56);
+    g.add(iris);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.04, 16, 16), pupilMat);
+    p.position.set(x, 0.13, 0.58);
+    g.add(p);
+  }
+  addEye(-0.16);
+  addEye(0.16);
+
+  const browMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.8 });
+  for (const x of [-0.2, 0.2]) {
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.02), browMat);
+    brow.position.set(x, 0.26, 0.52);
+    brow.rotation.z = x < 0 ? 0.05 : -0.05;
+    g.add(brow);
+  }
+
+  const noseMat = new THREE.MeshStandardMaterial({ color: 0xC4A882, roughness: 0.7 });
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.09, 8), noseMat);
+  nose.position.set(0, 0, 0.58);
+  nose.rotation.x = 0.2;
+  g.add(nose);
+  const noseTip = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), noseMat);
+  noseTip.position.set(0, -0.02, 0.62);
+  g.add(noseTip);
+
+  const mouthMat = new THREE.MeshStandardMaterial({ color: 0xCC5555, roughness: 0.5 });
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.012, 8, 16, Math.PI), mouthMat);
+  mouth.position.set(0, -0.15, 0.54);
+  mouth.rotation.x = Math.PI * 0.15;
+  g.add(mouth);
+  let smiling = false;
+  function setSmile(smile) {
+    if (smile === smiling) return;
+    smiling = smile;
+    mouth.scale.y = smile ? -1 : 1;
+  }
+
+  // Glasses
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.7 });
+  for (const x of [-0.2, 0.2]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 12, 24), frameMat);
+    ring.position.set(x, 0.1, 0.5);
+    ring.rotation.z = 0.02;
+    g.add(ring);
+    const lensMat = new THREE.MeshStandardMaterial({ color: 0x224466, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.16, 20), lensMat);
+    lens.position.set(x, 0.1, 0.51);
+    g.add(lens);
+  }
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.025), frameMat);
+  bridge.position.set(0, 0.1, 0.5);
+  g.add(bridge);
+  for (const x of [-0.38, 0.38]) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.02, 0.02), frameMat);
+    arm.position.set(x * 1.5, 0.1, 0.2);
+    arm.rotation.y = -0.3 * Math.sign(x);
+    g.add(arm);
+  }
+
+  const neckMat = new THREE.MeshStandardMaterial({ color: 0xC4A882, roughness: 0.8 });
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.25, 12), neckMat);
+  neck.position.set(0, -0.55, 0);
+  g.add(neck);
+
+  const shadowMat = new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.15, roughness: 1, metalness: 0 });
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.6, 20), shadowMat);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(0, -0.65, 0);
+  g.add(shadow);
+
+  // Floating particles
+  const particleCount = 500;
+  const particleGeo = new THREE.BufferGeometry();
+  const basePos = new Float32Array(particleCount * 3);
+  const pPos = new Float32Array(particleCount * 3);
+  const pPhase = new Float32Array(particleCount * 3);
+  for (let i = 0; i < particleCount; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = 0.8 + Math.random() * 1.5;
+    basePos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    basePos[i * 3 + 1] = r * Math.cos(phi) * 0.6;
+    basePos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    pPos[i * 3] = basePos[i * 3];
+    pPos[i * 3 + 1] = basePos[i * 3 + 1];
+    pPos[i * 3 + 2] = basePos[i * 3 + 2];
+    pPhase[i * 3] = Math.random() * Math.PI * 2;
+    pPhase[i * 3 + 1] = Math.random() * Math.PI * 2;
+    pPhase[i * 3 + 2] = Math.random() * Math.PI * 2;
+  }
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const particleMat = new THREE.PointsMaterial({
+    color: 0x88bbff,
+    size: 0.015,
+    transparent: true,
+    opacity: 0.3,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const particles = new THREE.Points(particleGeo, particleMat);
+  scene.add(particles);
+  let pTime = 0;
+
+  let rX = 0, rY = 0, rZ = 0;
+  let lastTs = 0;
+
+  function setOrientation(gx, gy, gz, ts) {
+    if (lastTs === 0) { lastTs = ts; return; }
+    const dt = Math.min((ts - lastTs) / 1000, 0.05);
+    lastTs = ts;
+    const deg2rad = Math.PI / 180;
+    rX += gx * deg2rad * dt;
+    rY += gz * deg2rad * dt;
+    rZ += gy * deg2rad * dt;
+    rX *= 0.998;
+    rY *= 0.998;
+    rZ *= 0.998;
+    g.rotation.x = rX;
+    g.rotation.y = rY;
+    g.rotation.z = rZ;
+  }
+
+  function resetOrientation() {
+    rX = 0; rY = 0; rZ = 0;
+    lastTs = 0;
+    g.rotation.x = 0;
+    g.rotation.y = 0;
+    g.rotation.z = 0;
+    g.updateMatrixWorld(true);
+  }
+
+  let sbs = false;
+  function toggleSbs() {
+    sbs = !sbs;
+    resize();
+    return sbs;
+  }
+
+  function resize() {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    renderer.setSize(w, h);
+    if (sbs) {
+      const halfAspect = (w / 2) / h;
+      camera.aspect = halfAspect;
+      cameraL.aspect = halfAspect;
+      cameraR.aspect = halfAspect;
+      cameraL.updateProjectionMatrix();
+      cameraR.updateProjectionMatrix();
+    } else {
+      camera.aspect = w / h;
+    }
+    camera.updateProjectionMatrix();
+  }
+
+  const ro = new ResizeObserver(resize);
+  ro.observe(container);
+  resize();
+
+  function animate(ts) {
+    requestAnimationFrame(animate);
+    pTime += 0.008;
+    const amp = 0.04;
+    const pos = particles.geometry.attributes.position.array;
+    for (let i = 0; i < particleCount; i++) {
+      pos[i * 3] = basePos[i * 3] + Math.sin(pTime * 1.1 + pPhase[i * 3]) * amp;
+      pos[i * 3 + 1] = basePos[i * 3 + 1] + Math.sin(pTime * 0.9 + pPhase[i * 3 + 1]) * amp;
+      pos[i * 3 + 2] = basePos[i * 3 + 2] + Math.sin(pTime * 1.3 + pPhase[i * 3 + 2]) * amp;
+    }
+    particles.geometry.attributes.position.needsUpdate = true;
+    if (sbs) {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      renderer.setViewport(0, 0, Math.floor(w / 2), h);
+      renderer.setScissor(0, 0, Math.floor(w / 2), h);
+      renderer.setScissorTest(true);
+      renderer.render(scene, cameraL);
+
+      renderer.setViewport(Math.ceil(w / 2), 0, Math.floor(w / 2), h);
+      renderer.setScissor(Math.ceil(w / 2), 0, Math.floor(w / 2), h);
+      renderer.render(scene, cameraR);
+
+      renderer.setScissorTest(false);
+    } else {
+      renderer.setViewport(0, 0, container.clientWidth, container.clientHeight);
+      renderer.render(scene, camera);
+    }
+  }
+  animate();
+
+  window.__imu3d = { setOrientation, resetOrientation, resize, setSmile, toggleSbs };
+}
+
+try {
+  initScene();
+} catch (e) {
+  console.error('[3D] init failed:', e);
+}
+</script>
+
+<script>
+(function() {
+  'use strict';
+
+  const AIR_VID = 0x3318;
+  const IMU_IFACE = 3;
+  const IMU_EP_OUT = 0x05;
+  const IMU_EP_IN = 0x84;
+  const MAX_HISTORY = 500;
+
+  let device = null;
+  let hidDevices = [];
+  let polling = false;
+  let imuHistory = [];
+  let connected = false;
+  let imuEnabled = false;
+  let connectInProgress = false;
+
+  const connectBtn = document.getElementById('connect-btn');
+  const recenterBtn = document.getElementById('recenter-btn');
+  const statusText = document.getElementById('status-text');
+  const statusDot = document.getElementById('status-dot');
+  const gyroCanvas = document.getElementById('gyro-canvas');
+  const gyroCtx = gyroCanvas.getContext('2d');
+  const gyroValues = document.getElementById('gyro-values');
+  const graphToggle = document.getElementById('graph-toggle');
+  const graphBody = document.getElementById('graph-body');
+  const graphOverlay = document.getElementById('graph-overlay');
+
+  function setStatus(text, cls) {
+    statusText.innerHTML = '<span class="status-dot ' + cls + '" id="status-dot"></span>' + text;
+    if (cls === 'connected') {
+      connectBtn.textContent = 'Disconnect';
+      connectBtn.disabled = false;
+    } else if (cls === 'connecting') {
+      connectBtn.textContent = 'Connecting...';
+      connectBtn.disabled = true;
+    } else {
+      connectBtn.textContent = 'Connect';
+      connectBtn.disabled = false;
+    }
+    recenterBtn.disabled = cls !== 'connected' || !imuEnabled;
+    const sbsBtn = document.getElementById('sbs-btn');
+    if (sbsBtn) sbsBtn.style.display = cls === 'connected' ? '' : 'none';
+  }
+
+  function log(msg) {
+    console.log('[Demo]', msg);
+  }
+
+  function warn(msg) {
+    console.warn('[Demo]', msg);
+  }
+
+  // ── CRC32 ──
+  const crc32Table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let crc = i;
+    for (let j = 0; j < 8; j++) crc = (crc & 1) ? (0xEDB88320 ^ (crc >>> 1)) : (crc >>> 1);
+    crc32Table[i] = crc;
+  }
+  function crc32(data) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < data.length; i++) crc = crc32Table[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+    return crc ^ 0xFFFFFFFF;
+  }
+
+  function buildImuCommand(cmdId, data) {
+    const buf = new Uint8Array(0x40);
+    const payload = new Uint8Array([cmdId, ...data]);
+    const length = data.length + 3;
+    buf[0] = 0xAA;
+    buf[5] = length & 0xFF;
+    buf[6] = (length >> 8) & 0xFF;
+    buf[7] = cmdId;
+    buf.set(data, 8);
+    const chk = crc32(buf.slice(5, 5 + length));
+    buf[1] = chk & 0xFF;
+    buf[2] = (chk >> 8) & 0xFF;
+    buf[3] = (chk >> 16) & 0xFF;
+    buf[4] = (chk >> 24) & 0xFF;
+    return buf;
+  }
+
+  function readInt16(data, offset) {
+    if (offset + 2 > data.length) return 0;
+    return data[offset] | (data[offset + 1] << 8);
+  }
+  function readInt24(data, offset) {
+    if (offset + 3 > data.length) return 0;
+    let val = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16);
+    if (val & 0x800000) val -= 0x1000000;
+    return val;
+  }
+  function readInt32(data, offset) {
+    if (offset + 4 > data.length) return 0;
+    return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+  }
+
+  function isImuPacket(data) {
+    return data.length >= 4 && data[0] === 0x01 && data[1] === 0x02;
+  }
+
+  function parseImuData(data) {
+    if (!isImuPacket(data)) return null;
+    const rawGx = readInt24(data, 0x12);
+    const rawGy = readInt24(data, 0x15);
+    const rawGz = readInt24(data, 0x18);
+    const gMult = readInt16(data, 0x0C);
+    const gDiv = readInt32(data, 0x0E);
+    const gx = gDiv !== 0 ? (rawGx * gMult) / gDiv : 0;
+    const gy = gDiv !== 0 ? (rawGy * gMult) / gDiv : 0;
+    const gz = gDiv !== 0 ? (rawGz * gMult) / gDiv : 0;
+    const rawAx = readInt24(data, 0x21);
+    const rawAy = readInt24(data, 0x24);
+    const rawAz = readInt24(data, 0x27);
+    const aMult = readInt16(data, 0x1B);
+    const aDiv = readInt32(data, 0x1D);
+    const ax = aDiv !== 0 ? (rawAx * aMult) / aDiv : 0;
+    const ay = aDiv !== 0 ? (rawAy * aMult) / aDiv : 0;
+    const az = aDiv !== 0 ? (rawAz * aMult) / aDiv : 0;
+    const rawMx = readInt16(data, 0x30);
+    const rawMy = readInt16(data, 0x32);
+    const rawMz = readInt16(data, 0x34);
+    const mOff = readInt16(data, 0x2A);
+    const mDiv = readInt32(data, 0x2C);
+    const mx = mDiv !== 0 ? (rawMx - mOff) / mDiv : 0;
+    const my = mDiv !== 0 ? (rawMy - mOff) / mDiv : 0;
+    const mz = mDiv !== 0 ? (rawMz - mOff) / mDiv : 0;
+    const temp = readInt16(data, 0x02);
+    const tempC = temp !== 0 ? temp / 326.8 + 25.0 : 0;
+    return { gx, gy, gz, ax, ay, az, mx, my, mz, temp: tempC };
+  }
+
+  // ── IMU data handler ──
+  function handleImuData(bytes) {
+    const imu = parseImuData(bytes);
+    if (!imu) return;
+    imuHistory.push(imu);
+    if (imuHistory.length > MAX_HISTORY) imuHistory.shift();
+    if (window.__imu3d) window.__imu3d.setOrientation(imu.gx, imu.gy, imu.gz, performance.now());
+    drawGyroGraph(imu);
+  }
+
+  // ── Gyro graph ──
+  function drawGyroGraph(imu) {
+    const rect = gyroCanvas.parentElement.getBoundingClientRect();
+    const w = gyroCanvas.width = rect.width - 8;
+    const h = gyroCanvas.height = 100;
+    const ctx = gyroCtx;
+    if (w <= 0) return;
+
+    const data = imuHistory;
+    if (data.length < 2) return;
+
+    let maxAbs = 1;
+    for (let i = 0; i < data.length; i++) {
+      maxAbs = Math.max(maxAbs, Math.abs(data[i].gx), Math.abs(data[i].gy), Math.abs(data[i].gz));
+    }
+    const scale = (h * 0.45) / maxAbs;
+    const midY = h / 2;
+    const step = w / Math.min(data.length, 200);
+    const use = data.slice(-Math.floor(w / step));
+
+    function drawTrace(key, color) {
+      if (use.length < 2) return;
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < use.length; i++) {
+        const x = i * step;
+        const y = midY - use[i][key] * scale;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, w, h);
+
+    // center line
+    ctx.strokeStyle = '#21262d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, midY);
+    ctx.lineTo(w, midY);
+    ctx.stroke();
+
+    drawTrace('gx', '#ff6b6b');
+    drawTrace('gy', '#51cf66');
+    drawTrace('gz', '#339af0');
+
+    gyroValues.textContent = 'X:' + imu.gx.toFixed(0) + ' Y:' + imu.gy.toFixed(0) + ' Z:' + imu.gz.toFixed(0);
+  }
+
+  // ── USB connection ──
+  async function ensureImuInterfaceClaimed() {
+    if (!device) return false;
+    const cfg = device.configuration;
+    if (!cfg) return false;
+    const iface = cfg.interfaces.find(i => i.interfaceNumber === IMU_IFACE);
+    if (!iface) { warn('Interface ' + IMU_IFACE + ' not found'); return false; }
+    if (!iface.claimed) {
+      try {
+        await device.claimInterface(IMU_IFACE);
+        log('Claimed IF' + IMU_IFACE);
+      } catch (err) {
+        warn('Cannot claim IF' + IMU_IFACE + ': ' + err.message);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function sendImuEnable(enable) {
+    const buf = buildImuCommand(0x19, [enable ? 0x01 : 0x00]);
+    const label = enable ? 'Enable' : 'Disable';
+
+    if (device) {
+      const claimed = await ensureImuInterfaceClaimed();
+      if (claimed) {
+        try {
+          await device.transferOut(IMU_EP_OUT, buf);
+          log('IMU ' + label + ' via USB');
+          return true;
+        } catch (err) {
+          warn('IMU USB ' + label + ' failed: ' + err.message);
+        }
+      }
+    }
+
+    if (hidDevices.length > 0) {
+      for (const hd of hidDevices) {
+        for (const col of (hd.collections || [])) {
+          for (const r of (col.outputReports || [])) {
+            try {
+              await hd.sendReport(r.reportId, buf);
+              log('IMU ' + label + ' via HID R' + r.reportId + ' out');
+              return true;
+            } catch (err) {}
+          }
+          for (const r of (col.featureReports || [])) {
+            try {
+              await hd.sendFeatureReport(r.reportId, buf);
+              log('IMU ' + label + ' via HID R' + r.reportId + ' feature');
+              return true;
+            } catch (err) {}
+          }
+        }
+      }
+    }
+
+    warn('IMU ' + label + ' failed: all paths exhausted');
+    return false;
+  }
+
+  async function pollImu() {
+    if (!device) return;
+    try {
+      const claimed = await ensureImuInterfaceClaimed();
+      if (!claimed) return;
+      polling = true;
+      while (polling && device) {
+        try {
+          const result = await device.transferIn(IMU_EP_IN, 64);
+          if (result.data && result.data.byteLength > 0) {
+            handleImuData(new Uint8Array(result.data.buffer));
+          }
+          if (result.status === 'stall') {
+            try { await device.clearHalt('in', IMU_EP_IN); } catch(e) {}
+          }
+        } catch (err) {
+          if (polling) {
+            warn('Poll error: ' + err.message);
+            polling = false;
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      warn('Poll init error: ' + err.message);
+    }
+  }
+
+  async function connect() {
+    if (connectInProgress) return;
+    connectInProgress = true;
+    setStatus('Connecting...', 'connecting');
+
+    try {
+      // Request WebUSB device
+      if (navigator.usb) {
+        try {
+          const devs = await navigator.usb.requestDevice({ filters: [{ vendorId: AIR_VID }] });
+          if (devs && devs.length > 0) {
+            device = devs[0];
+            await device.open();
+            if (device.configuration === null) {
+              await device.selectConfiguration(1);
+            }
+            log('WebUSB device opened');
+          }
+        } catch (err) {
+          if (err.name !== 'NotFoundError') warn('WebUSB error: ' + err.message);
+        }
+      }
+
+      // Request WebHID devices
+      if (navigator.hid) {
+        try {
+          const devs = await navigator.hid.requestDevice({ filters: [{ vendorId: AIR_VID }] });
+          for (const d of devs) {
+            await d.open();
+            hidDevices.push(d);
+            d.addEventListener('inputreport', (event) => {
+              handleImuData(new Uint8Array(event.data.buffer));
+            });
+            log('HID device opened');
+          }
+        } catch (err) {
+          if (err.name !== 'NotFoundError') warn('WebHID error: ' + err.message);
+        }
+      }
+
+      if (!device && hidDevices.length === 0) {
+        warn('No device found');
+        setStatus('No device', 'disconnected');
+        connectInProgress = false;
+        return;
+      }
+
+      setStatus('Enabling IMU...', 'connecting');
+
+      // Send IMU enable
+      imuEnabled = await sendImuEnable(true);
+
+      // Start polling USB for IMU data
+      if (device) {
+        pollImu();
+      }
+
+      connected = true;
+      setStatus('Connected', 'connected');
+      if (window.__imu3d) window.__imu3d.setSmile(true);
+    } catch (err) {
+      warn('Connection error: ' + err.message);
+      setStatus('Error', 'disconnected');
+    }
+
+    connectInProgress = false;
+  }
+
+  async function disconnect() {
+    polling = false;
+    imuEnabled = false;
+    connected = false;
+
+    if (device) {
+      try { await device.close(); } catch(e) {}
+      device = null;
+    }
+    while (hidDevices.length > 0) {
+      const d = hidDevices.pop();
+      try { await d.close(); } catch(e) {}
+    }
+
+    const sbsBtn = document.getElementById('sbs-btn');
+    if (sbsBtn && sbsBtn.textContent === 'Mono' && window.__imu3d && window.__imu3d.toggleSbs) {
+      window.__imu3d.toggleSbs();
+      sbsBtn.textContent = 'SBS 3D';
+    }
+    imuHistory.length = 0;
+    if (window.__imu3d) window.__imu3d.resetOrientation();
+    if (window.__imu3d) window.__imu3d.setSmile(false);
+    log('Disconnected');
+    setStatus('Disconnected', 'disconnected');
+  }
+
+  // ── UI event handlers ──
+  connectBtn.addEventListener('click', () => {
+    if (connected) {
+      disconnect();
+    } else {
+      connect();
+    }
+  });
+
+  recenterBtn.addEventListener('click', () => {
+    if (window.__imu3d) window.__imu3d.resetOrientation();
+  });
+
+  document.getElementById('sbs-btn').addEventListener('click', () => {
+    if (window.__imu3d && window.__imu3d.toggleSbs) {
+      const enabled = window.__imu3d.toggleSbs();
+      document.getElementById('sbs-btn').textContent = enabled ? 'Mono' : 'SBS 3D';
+    }
+  });
+
+  graphToggle.addEventListener('click', () => {
+    const hidden = graphBody.style.display === 'none';
+    graphBody.style.display = hidden ? '' : 'none';
+    graphToggle.textContent = hidden ? 'Hide' : 'Show';
+  });
+
+  // Gyro graph resize
+  function resizeGraph() {
+    const rect = gyroCanvas.parentElement.getBoundingClientRect();
+    gyroCanvas.width = rect.width - 8;
+    gyroCanvas.height = 100;
+  }
+  window.addEventListener('resize', resizeGraph);
+
+  // Show connected state if user clicks Connect again while connected, disconnect
+  // (handled above in click handler)
+
+  // Auto-reconnect if we already have permission
+  async function tryAutoConnect() {
+    let found = false;
+    if (navigator.usb) {
+      try {
+        const devs = await navigator.usb.getDevices();
+        if (devs.length > 0) {
+          device = devs[0];
+          await device.open();
+          if (device.configuration === null) await device.selectConfiguration(1);
+          log('Auto-connected WebUSB');
+          found = true;
+        }
+      } catch (err) { warn('Auto-connect USB:', err.message); }
+    }
+    if (navigator.hid) {
+      try {
+        const devs = await navigator.hid.getDevices();
+        for (const d of devs) {
+          await d.open();
+          hidDevices.push(d);
+          d.addEventListener('inputreport', (event) => {
+            handleImuData(new Uint8Array(event.data.buffer));
+          });
+          log('Auto-connected HID');
+          found = true;
+        }
+      } catch (err) { warn('Auto-connect HID:', err.message); }
+    }
+    if (found) {
+      setStatus('Enabling IMU...', 'connecting');
+      imuEnabled = await sendImuEnable(true);
+      if (device) pollImu();
+      connected = true;
+      setStatus('Connected', 'connected');
+      if (window.__imu3d) window.__imu3d.setSmile(true);
+    }
+  }
+
+  tryAutoConnect();
+
+  setStatus('Disconnected', 'disconnected');
+  resizeGraph();
+
+  // Handle device disconnect events
+  if (navigator.usb) {
+    navigator.usb.addEventListener('disconnect', (event) => {
+      if (device && event.device === device) {
+        log('USB device disconnected');
+        disconnect();
+      }
+    });
+  }
+
+  log('Demo initialized. Click Connect to start.');
+})();
+</script>
+</body>
+</html>
