@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Orbital Slingshot</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Courier New',monospace;color:#fff;-webkit-user-select:none;user-select:none}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+#fps{position:absolute;top:12px;left:14px;font-size:13px;opacity:.5;font-family:monospace}
+#score{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:clamp(16px,3vw,28px);font-weight:700;text-shadow:0 0 12px rgba(0,200,255,.6);letter-spacing:1px;white-space:nowrap}
+#score span{color:#0cf}
+#multiplier{position:absolute;top:60px;left:50%;transform:translateX(-50%);font-size:clamp(12px,2vw,18px);opacity:.6}
+#status{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);font-size:clamp(10px,1.5vw,14px);opacity:.5;text-align:center;line-height:1.6;pointer-events:none;text-shadow:0 0 8px rgba(0,0,0,.8)}
+#status kbd{background:rgba(255,255,255,.12);padding:1px 7px;border-radius:3px;font-family:inherit;border:1px solid rgba(255,255,255,.15)}
+.ctrl{position:absolute;bottom:20px;right:20px;pointer-events:auto;z-index:20}
+.ctrl button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#fff;font-family:inherit;font-size:13px;padding:8px 16px;cursor:pointer;backdrop-filter:blur(4px);transition:.2s;margin-left:8px}
+.ctrl button:hover{background:rgba(255,255,255,.18)}
+.ctrl button.active{background:rgba(0,200,255,.25);border-color:#0cf}
+#flash{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .15s;background:radial-gradient(circle at center,rgba(255,200,100,.3),transparent 70%)}
+#flash.show{opacity:1}
+#msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:clamp(20px,5vw,48px);font-weight:700;text-shadow:0 0 30px rgba(255,150,0,.5);opacity:0;transition:opacity .5s;pointer-events:none;white-space:nowrap}
+#msg.show{opacity:1}
+#msg.pop{opacity:1;animation:popOut .8s forwards}
+@keyframes popOut{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-100%) scale(1.2)}}
+canvas{display:block}
+
+#panelBtn{position:absolute;top:12px;right:14px;pointer-events:auto;z-index:20;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;font-family:inherit;font-size:16px;padding:6px 12px;cursor:pointer;backdrop-filter:blur(4px);transition:.2s;line-height:1}
+#panelBtn:hover{background:rgba(255,255,255,.14)}
+#panelBtn.active{background:rgba(0,200,255,.2);border-color:#0cf}
+#panel{position:absolute;top:0;right:0;width:200px;height:100%;pointer-events:auto;z-index:25;background:rgba(10,10,20,.85);backdrop-filter:blur(8px);border-left:1px solid rgba(255,255,255,.08);transform:translateX(100%);transition:transform .3s ease;padding:50px 18px 18px;display:flex;flex-direction:column;gap:14px}
+#panel.open{transform:translateX(0)}
+#panel .label{font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:.4;margin-bottom:2px}
+#panel label{display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;padding:6px 0}
+#panel input[type=checkbox]{appearance:none;width:36px;height:20px;border-radius:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);cursor:pointer;position:relative;transition:.2s;flex-shrink:0}
+#panel input[type=checkbox]::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#555;transition:.2s}
+#panel input[type=checkbox]:checked{background:rgba(0,200,255,.3);border-color:#0cf}
+#panel input[type=checkbox]:checked::after{background:#0cf;transform:translateX(16px)}
+</style>
+</head>
+<body>
+
+<div id=ui>
+  <div id=fps>-- fps</div>
+  <div id=score>SCORE <span id=scoreVal>0</span></div>
+  <div id=multiplier>×<span id=multVal>1</span> slingshot chain</div>
+  <div id=status>🤏 pinch hand / 🖱 drag mouse · release to launch · <kbd>f</kbd> fullscreen · <kbd>r</kbd> reset · <kbd>wasd</kbd> move · <kbd>↑↓</kbd> height · <kbd>b</kbd> bloom · <kbd>d</kbd> dof · <kbd>g</kbd> rays · <kbd>S</kbd> settings</div>
+  <div id=flash></div>
+  <div id=msg></div>
+  <div class=ctrl>
+    <button id=webcamBtn>📷 hands</button>
+    <button id=panelBtn>⚙</button>
+  </div>
+  <div id=panel>
+    <div class=label>Post Process</div>
+    <label><input type=checkbox id=toggleDof checked><span>Depth of Field</span></label>
+    <label><input type=checkbox id=toggleBloom checked><span>Bloom</span></label>
+    <div class=label>Render Quality</div>
+    <input type=range id=qualityRange min=30 max=100 value=66 style=width:100%>
+    <div style=font-size:11px;opacity:.5;text-align:right;margin-top:-8px>66%</div>
+    <div class=label>Debug</div>
+    <label><input type=checkbox id=toggleRays><span>Eye Rays</span></label>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+    "three/": "https://unpkg.com/three@0.162.0/build/",
+    "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+// ─── IMPORTS ───────────────────────────────────────────────
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+
+// ─── SEEDED RNG ────────────────────────────────────────────
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+// ─── CONSTANTS ─────────────────────────────────────────────
+const G=0.4;
+const SUN_MASS=80;
+const CAM_START=new THREE.Vector3(0,5,16);
+const ROCKET_SPAWN=new THREE.Vector3(0,-1.5,5);
+const LAUNCH_VEL_SCALE=3.5;
+const DT=1/60;
+const SUBSTEPS=4;
+const MAX_TRAIL=120;
+const SLINGSHOT_RADIUS_FACTOR=2.8;
+
+// ─── GLOBALS ───────────────────────────────────────────────
+let rng=mulberry32(Date.now());
+let score=0, chainMult=1, chainTimer=0;
+let scene, camera, renderer;
+let stereo, composerL, composerR;
+let clock=new THREE.Clock();
+let bodies=[], planets=[], stars;
+let sunMesh,sunGlow,sunLight;
+let rocket, rocketGroup, aimLine, ghostRocket, aimMarker;
+let rocketState=null; // {pos,vel,active,scoredPlanets,trail,life}
+let isAiming=false, aimStartPos=null, aimCurrentPos=null;
+let mouse=new THREE.Vector2();
+let isPointerDown=false;
+let isOrbiting=false, orbitStartX=0, orbitStartY=0, orbitStartAngle=0, orbitStartHeight=0;
+//
+let dofPassL,dofPassR;
+let camDist=CAM_START.length(),camAngle=Math.atan2(CAM_START.x,CAM_START.z),camHeight=CAM_START.y;
+const keys=new Set();
+  const ROCKET_CAM_OFFSET=new THREE.Vector3(0,-1.5,5);
+  let renderScale=.66;
+  let hoveredBody=null;
+let rocketHovered=false;
+let baseRocketScale=1;
+let debugRayL,debugRayR;
+let smokeParticles=[], explosionParticles=[];
+let smokeTex,flameTex;
+let miniCamera;
+let webcamActive=false, handActive=false;
+let videoEl, handLandmarker;
+let handPos=null, handPinching=false;
+let handLandmarks=null;
+let handOverlayCanvas=null;
+let handCursor=null;
+let grabOffset=null;
+let resizeTimeout;
+
+// ─── HELPERS ───────────────────────────────────────────────
+function randomColor(rng,h,s,l){return new THREE.Color().setHSL(h??rng(),s??(.5+rng()*.5),l??(.4+rng()*.3))}
+
+function createCircleTexture(size,stops){
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const ctx=c.getContext('2d');const g=ctx.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  stops.forEach(([p,color])=>g.addColorStop(p,color));
+  ctx.fillStyle=g;ctx.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+smokeTex=createCircleTexture(64,[[0,'rgba(200,200,200,1)'],[.3,'rgba(180,180,200,.6)'],[1,'rgba(150,150,180,0)']]);
+flameTex=createCircleTexture(64,[[0,'rgba(255,255,200,1)'],[.2,'rgba(255,200,50,.8)'],[.5,'rgba(255,100,20,.4)'],[1,'rgba(255,50,0,0)']]);
+
+function flash(){const el=document.getElementById('flash');el.classList.add('show');setTimeout(()=>el.classList.remove('show'),150)}
+
+function showMsg(text,isGood=true){
+  const el=document.getElementById('msg');el.textContent=text;
+  el.style.color=isGood?'#fff':'#f66';
+  el.classList.remove('show','pop');void el.offsetWidth;
+  el.classList.add(isGood?'show':'pop');
+}
+
+function updateScoreUI(){
+  document.getElementById('scoreVal').textContent=score;
+  document.getElementById('multVal').textContent=chainMult;
+}
+
+// ─── SCENE SETUP ───────────────────────────────────────────
+function init(){
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x050510);
+  scene.fog=new THREE.FogExp2(0x050510,.007);
+
+  camera=new THREE.PerspectiveCamera(55,window.innerWidth/window.innerHeight,.1,500);
+  camera.position.copy(CAM_START);
+  camera.lookAt(0,0,0);
+
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.2;
+  renderer.domElement.style.position='fixed';
+  renderer.domElement.style.top='0';
+  renderer.domElement.style.left='0';
+  document.body.prepend(renderer.domElement);
+
+  // lights
+  sunLight=new THREE.PointLight(0xffdd88,2,50);
+  sunLight.position.set(0,0,0);
+  scene.add(sunLight);
+  const amb=new THREE.AmbientLight(0x222244,.15);
+  scene.add(amb);
+  const hemi=new THREE.HemisphereLight(0x4466ff,0x222244,.2);
+  scene.add(hemi);
+
+  createStarfield();
+  createSolarSystem();
+  createRocket();
+
+  window.addEventListener('resize',onResize);
+  document.addEventListener('keydown',onKey);
+  document.addEventListener('keydown',e=>keys.add(e.key));
+  document.addEventListener('keyup',e=>keys.delete(e.key));
+  renderer.domElement.addEventListener('pointerdown',onPointerDown);
+  renderer.domElement.addEventListener('pointermove',onPointerMove);
+  renderer.domElement.addEventListener('pointerup',onPointerUp);
+  renderer.domElement.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
+  renderer.domElement.addEventListener('wheel',onWheel,{passive:false});
+
+  // touch controls
+  renderer.domElement.addEventListener('touchstart',e=>{
+    const t=e.changedTouches[0];
+    isPointerDown=true;
+    if(!isAiming&&!rocketState?.active&&hitTestRocket(t.clientX,t.clientY)){
+      const wp=getWorldPosFromScreen(t.clientX,t.clientY);
+      startAim(wp);
+    }
+  },{passive:true});
+  renderer.domElement.addEventListener('touchmove',e=>{
+    const t=e.changedTouches[0];
+    mouse.set(t.clientX,t.clientY);
+    if(isAiming){
+      const wp=getWorldPosFromScreen(t.clientX,t.clientY);
+      updateAim(wp);
+    }
+  },{passive:true});
+  renderer.domElement.addEventListener('touchend',e=>{
+    isPointerDown=false;
+    if(isAiming)releaseAim();
+  },{passive:true});
+
+  document.getElementById('webcamBtn').addEventListener('click',initWebcam);
+
+  // ─── EFFECT TOGGLE PANEL ─────────────────────────────────
+  const panel=document.getElementById('panel');
+  const panelBtn=document.getElementById('panelBtn');
+  panelBtn.addEventListener('click',()=>{
+    panel.classList.toggle('open');
+    panelBtn.classList.toggle('active');
+  });
+  document.getElementById('toggleDof').addEventListener('change',e=>{
+    const on=e.target.checked;
+    if(dofPassL)dofPassL.enabled=on;
+    if(dofPassR)dofPassR.enabled=on;
+  });
+  document.getElementById('toggleRays').addEventListener('change',e=>{
+    debugRayL.visible=e.target.checked;
+    debugRayR.visible=e.target.checked;
+  });
+  document.getElementById('qualityRange').addEventListener('input',e=>{
+    const val=e.target.value/100;
+    renderScale=Math.max(.3,Math.min(1,val));
+    e.target.parentElement.querySelector('div').textContent=Math.round(renderScale*100)+'%';
+    applyRenderScale();
+  });
+  document.getElementById('toggleBloom').addEventListener('change',e=>{
+    const on=e.target.checked;
+    for(const c of[composerL,composerR]){
+      const p=c?.passes.find(p=>p instanceof UnrealBloomPass);
+      if(p)p.enabled=on;
+    }
+  });
+
+  // debug rays
+  const rayMat=new THREE.LineBasicMaterial({color:0xff4444,transparent:true,opacity:.4});
+  const rayGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+  debugRayL=new THREE.Line(rayGeo.clone(),rayMat);
+  debugRayR=new THREE.Line(rayGeo.clone(),new THREE.LineBasicMaterial({color:0x44ddff,transparent:true,opacity:.4}));
+  debugRayL.visible=false;
+  debugRayR.visible=false;
+  scene.add(debugRayL);
+  scene.add(debugRayR);
+
+  setupPostProcessing();
+
+  // minimap camera
+  miniCamera=new THREE.OrthographicCamera(-25,25,25,-25,.1,100);
+  miniCamera.position.set(0,50,0);
+  miniCamera.up.set(0,0,-1);
+  miniCamera.lookAt(0,0,0);
+
+  // hand cursor (3D representation of hand position)
+  const hcGeo=new THREE.SphereGeometry(.08,12,12);
+  const hcMat=new THREE.MeshBasicMaterial({color:0x44ff88,transparent:true,opacity:.6});
+  handCursor=new THREE.Mesh(hcGeo,hcMat);
+  handCursor.visible=false;
+  scene.add(handCursor);
+
+  updateScoreUI();
+  animate();
+}
+
+// ─── STARFIELD ─────────────────────────────────────────────
+function createStarfield(){
+  const n=3000,pos=new Float32Array(n*3),col=new Float32Array(n*3),siz=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const theta=rng()*Math.PI*2,phi=Math.acos(2*rng()-1),r=80+rng()*200;
+    pos[i*3]=r*Math.sin(phi)*Math.cos(theta);
+    pos[i*3+1]=r*Math.cos(phi);
+    pos[i*3+2]=r*Math.sin(phi)*Math.sin(theta);
+    const b=.5+rng()*.5;
+    col[i*3]=b;col[i*3+1]=b;col[i*3+2]=b+rng()*.2;
+    siz[i]=.3+rng()*1.2;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  geo.setAttribute('size',new THREE.BufferAttribute(siz,1));
+  const mat=new THREE.PointsMaterial({size:.3,vertexColors:true,sizeAttenuation:true,transparent:true,opacity:.8,depthWrite:false});
+  stars=new THREE.Points(geo,mat);
+  scene.add(stars);
+}
+
+// ─── SOLAR SYSTEM ──────────────────────────────────────────
+function createSolarSystem(){
+  // Sun
+  const sunGeo=new THREE.SphereGeometry(1.6,48,48);
+  // Voronoi shader uniforms
+  const sunUniforms={uTime:{value:0}};
+
+  const sunMat=new THREE.ShaderMaterial({
+    uniforms:sunUniforms,
+    vertexShader:`
+      varying vec2 vUv;
+      varying vec3 vNorm;
+      varying vec3 vPos;
+      void main(){
+        vUv=uv;
+        vNorm=normalize(normalMatrix*normal);
+        vPos=(modelViewMatrix*vec4(position,1.)).xyz;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);
+      }
+    `,
+    fragmentShader:`
+      precision highp float;
+      varying vec2 vUv;
+      varying vec3 vNorm;
+      uniform float uTime;
+
+      // hash & voronoi
+      vec3 hash(vec3 p){
+        p=fract(p*vec3(443.8975,397.2973,491.1871));
+        p+=dot(p,p+19.19);
+        return fract(vec3(p.x*p.y,p.y*p.z,p.z*p.x));
+      }
+      float voronoi(vec3 p){
+        vec3 n=floor(p);
+        vec3 f=fract(p);
+        float d=1.;
+        for(int i=-1;i<=1;i++)
+        for(int j=-1;j<=1;j++)
+        for(int k=-1;k<=1;k++){
+          vec3 g=vec3(float(i),float(j),float(k));
+          vec3 o=hash(n+g);
+          o=.5+.5*sin(uTime*.15+6.283*o);
+          vec3 r=g+o-f;
+          d=min(d,dot(r,r));
+        }
+        return sqrt(d);
+      }
+
+      void main(){
+        vec3 dir=normalize(vNorm);
+        // map sphere direction to 3D voronoi coordinates
+        vec3 p=dir*3.;
+        float v=voronoi(p);
+        // ripple
+        float ripple=sin(length(p)*12.-uTime*2.)*.5+.5;
+        float pattern=v*.6+ripple*.4;
+        // base sun colors
+        vec3 col=mix(vec3(1.,.6,.2),vec3(1.,.9,.5),pattern);
+        col=mix(col,vec3(1.,.3,.05),smoothstep(.3,.8,pattern));
+        // edge glow (fake fresnel)
+        float rim=1.-abs(dot(dir,vec3(0.,0.,1.)));
+        col+=vec3(1.,.4,.0)*rim*.3;
+        gl_FragColor=vec4(col,1.);
+      }
+    `
+  });
+
+  sunMesh=new THREE.Mesh(sunGeo,sunMat);
+  scene.add(sunMesh);
+
+  // Sun glow sprite
+  const glowTex=createCircleTexture(128,[[0,'rgba(255,200,100,1)'],[.1,'rgba(255,160,50,.6)'],[.4,'rgba(255,100,20,.2)'],[1,'rgba(255,50,0,0)']]);
+  const glowMat=new THREE.SpriteMaterial({map:glowTex,blending:THREE.AdditiveBlending,transparent:true,opacity:.6,depthWrite:false});
+  sunGlow=new THREE.Sprite(glowMat);
+  sunGlow.scale.set(12,12,1);
+  scene.add(sunGlow);
+
+  const sunBody={pos:new THREE.Vector3(0,0,0),vel:new THREE.Vector3(0,0,0),mass:SUN_MASS,radius:1.6,isSun:true};
+  bodies.push(sunBody);
+
+  // Planets
+  const nPlanets=4+Math.floor(rng()*3);
+  for(let i=0;i<nPlanets;i++){
+    const orbitR=2.8+i*2.2+rng()*.8;
+    const angle=rng()*Math.PI*2;
+    const mass=1+rng()*4;
+    const radius=.25+rng()*.45;
+    const orbSpeed=Math.sqrt(G*SUN_MASS/(orbitR*orbitR*orbitR))*orbitR;
+    const tilt=(rng()-.5)*.3;
+    const color=randomColor(rng);
+    const hue=color.getHSL({}).h;
+
+    const pos=new THREE.Vector3(Math.cos(angle)*orbitR,tilt,Math.sin(angle)*orbitR);
+    const speed=Math.sqrt(G*SUN_MASS/orbitR);
+    const vel=new THREE.Vector3(-Math.sin(angle)*speed,0,Math.cos(angle)*speed);
+
+    const geo=new THREE.SphereGeometry(radius,24,24);
+    const mat=new THREE.MeshStandardMaterial({
+      color,roughness:.5+rng()*.4,metalness:.1+rng()*.3,
+      emissive:color,emissiveIntensity:.05
+    });
+    const mesh=new THREE.Mesh(geo,mat);
+    mesh.position.copy(pos);
+    mesh.userData.origScale=radius;
+    mesh.userData.origEmissiveIntensity=.05;
+    scene.add(mesh);
+
+    // ring?
+    if(rng()>.6){
+      const ringGeo=new THREE.RingGeometry(radius*1.4,radius*2.2,32);
+      const ringMat=new THREE.MeshBasicMaterial({
+        color,side:THREE.DoubleSide,transparent:true,opacity:.2+rng()*.2,
+        depthWrite:false
+      });
+      const ring=new THREE.Mesh(ringGeo,ringMat);
+      ring.rotation.x=Math.PI/2;
+      ring.position.copy(pos);
+      scene.add(ring);
+      mesh.userData.ring=ring;
+    }
+
+    const body={pos,vel,mass,radius,mesh,orbitR,orbSpeed,angle,index:i};
+    bodies.push(body);
+    planets.push(body);
+
+    // Moons
+    const nMoons=Math.floor(rng()*3);
+    for(let j=0;j<nMoons;j++){
+      const mOrbitR=radius*.6+rng()*radius*1.2;
+      const mAngle=rng()*Math.PI*2;
+      const mMass=mass*.05+rng()*mass*.1;
+      const mRadius=radius*.12+rng()*radius*.15;
+      const mColor=new THREE.Color().setHSL(hue+.1+rng()*.2,.3,.5+rng()*.3);
+      const mPos=new THREE.Vector3(
+        pos.x+Math.cos(mAngle)*mOrbitR,tilt*1.2+rng()*.15,
+        pos.z+Math.sin(mAngle)*mOrbitR
+      );
+      const mSpeed=Math.sqrt(G*mass/mOrbitR);
+      const mVel=new THREE.Vector3(
+        vel.x-Math.sin(mAngle)*mSpeed,0,
+        vel.z+Math.cos(mAngle)*mSpeed
+      );
+
+      const mGeo=new THREE.SphereGeometry(mRadius,12,12);
+      const mMat=new THREE.MeshStandardMaterial({color:mColor,roughness:.6,metalness:.1,emissive:mColor,emissiveIntensity:0});
+      const mMesh=new THREE.Mesh(mGeo,mMat);
+      mMesh.position.copy(mPos);
+      mMesh.userData.origScale=mRadius;
+      mMesh.userData.origEmissiveIntensity=0;
+      scene.add(mMesh);
+      bodies.push({pos:mPos,vel:mVel,mass:mMass,radius:mRadius,mesh:mMesh,parent:body,orbitR:mOrbitR,angle:mAngle});
+    }
+  }
+}
+
+// ─── ROCKET ────────────────────────────────────────────────
+function createRocket(){
+  rocketGroup=new THREE.Group();
+  const bodyGeo=new THREE.CylinderGeometry(.07,.12,.35,8);
+  const bodyMat=new THREE.MeshStandardMaterial({
+    color:0xff4444,metalness:.6,roughness:.3,emissive:0xff2200,emissiveIntensity:.15
+  });
+  const body=new THREE.Mesh(bodyGeo,bodyMat);
+  body.position.y=.175;
+  body.rotation.x=Math.PI/2;
+  rocketGroup.add(body);
+
+  const noseGeo=new THREE.ConeGeometry(.07,.2,8);
+  const noseMat=new THREE.MeshStandardMaterial({color:0xcc2222,metalness:.5,roughness:.3});
+  const nose=new THREE.Mesh(noseGeo,noseMat);
+  nose.position.y=.35;
+  rocketGroup.add(nose);
+
+  // fins
+  for(let i=0;i<3;i++){
+    const finGeo=new THREE.BoxGeometry(.015,.08,.04);
+    const finMat=new THREE.MeshStandardMaterial({color:0xaa1111,metalness:.4,roughness:.5});
+    const fin=new THREE.Mesh(finGeo,finMat);
+    fin.position.set(0,.02,.1);
+    fin.rotation.y=(i/3)*Math.PI*2;
+    rocketGroup.add(fin);
+  }
+
+  // flame glow
+  const flameMat=new THREE.SpriteMaterial({map:flameTex,blending:THREE.AdditiveBlending,transparent:true,opacity:0,depthWrite:false});
+  const flame=new THREE.Sprite(flameMat);
+  flame.scale.set(.3,.5,1);
+  flame.position.y=-.15;
+  rocketGroup.add(flame);
+  rocketGroup.userData.flameMat=flameMat;
+  rocketGroup.userData.flame=flame;
+
+  rocketGroup.position.copy(ROCKET_SPAWN);
+  rocketGroup.scale.set(1,1,1);
+  baseRocketScale=1;
+  scene.add(rocketGroup);
+  rocket=rocketGroup;
+
+  ghostRocket=rocketGroup.clone(true);
+  ghostRocket.visible=false;
+  ghostRocket.traverse(c=>{if(c.isMesh){c.material=c.material.clone();c.material.transparent=true;c.material.opacity=.25}});
+  scene.add(ghostRocket);
+
+  // aim marker (3D cursor proxy)
+  const markerGeo=new THREE.SphereGeometry(.06,8,8);
+  const markerMat=new THREE.MeshBasicMaterial({color:0x44ddff,transparent:true,opacity:.7});
+  aimMarker=new THREE.Mesh(markerGeo,markerMat);
+  aimMarker.visible=false;
+  scene.add(aimMarker);
+
+  // aim line (trajectory spline)
+  const aimGeo=new THREE.BufferGeometry();
+  const aimPositions=new Float32Array(200*3);
+  aimGeo.setAttribute('position',new THREE.BufferAttribute(aimPositions,3));
+  const aimMat=new THREE.LineBasicMaterial({color:0x44ddff,transparent:true,opacity:.6});
+  aimLine=new THREE.Line(aimGeo,aimMat);
+  aimLine.visible=false;
+  scene.add(aimLine);
+  // glow overlay for aim line
+  const aimGlowMat=new THREE.LineBasicMaterial({color:0x88eeff,transparent:true,opacity:.15});
+  const aimGlow=new THREE.Line(aimGeo.clone(),aimGlowMat);
+  aimGlow.visible=false;
+  aimLine.userData.glow=aimGlow;
+  scene.add(aimGlow);
+
+  resetRocket();
+}
+
+function resetRocket(){
+  rocketState=null;
+  rocketGroup.position.copy(ROCKET_SPAWN);
+  rocketGroup.quaternion.identity();
+  rocketGroup.visible=true;
+  rocketGroup.userData.flameMat.opacity=0;
+  ghostRocket.visible=false;
+  aimLine.visible=false;
+  if(aimLine.userData.glow)aimLine.userData.glow.visible=false;
+  isAiming=false;
+  aimStartPos=null;
+  aimCurrentPos=null;
+  //
+}
+
+// ─── AIMING ────────────────────────────────────────────────
+function startAim(worldPos){
+  if(rocketState?.active)return;
+  isAiming=true;
+  aimStartPos=rocketGroup.position.clone();
+  // default aim toward sun center
+  const fwd=new THREE.Vector3();camera.getWorldDirection(fwd);
+  const ref=rocketGroup.position;
+  const toSun=new THREE.Vector3(0,0,0).sub(ref);
+  const projDir=toSun.clone().sub(fwd.clone().multiplyScalar(toSun.dot(fwd)));
+  aimCurrentPos=ref.clone().add(projDir);
+  ghostRocket.position.copy(rocketGroup.position);
+  ghostRocket.visible=true;
+  aimMarker.position.copy(aimCurrentPos);
+  aimMarker.visible=true;
+  rocketGroup.visible=false;
+  aimMarker.scale.setScalar(1);
+  updateTrajectory();
+}
+
+function updateAim(worldPos){
+  if(!isAiming)return;
+  aimCurrentPos=worldPos.clone();
+  aimMarker.position.copy(aimCurrentPos);
+  updateTrajectory();
+}
+
+function releaseAim(){
+  if(!isAiming)return;
+  isAiming=false;
+  ghostRocket.visible=false;
+  aimLine.visible=false;
+  if(aimLine.userData.glow)aimLine.userData.glow.visible=false;
+
+  const startPos=ghostRocket.position.clone();
+  const vel=new THREE.Vector3().copy(aimCurrentPos).sub(startPos);
+  vel.y*=.6;
+  vel.multiplyScalar(LAUNCH_VEL_SCALE);
+
+  launchRocket(startPos,vel);
+  // launch burst
+  spawnLaunchBurst(startPos);
+}
+
+function launchRocket(pos,vel){
+  const startAngle=Math.atan2(pos.z,pos.x);
+  rocketState={
+    pos:pos.clone(),vel:vel.clone(),
+    active:true,life:0,
+    scoredPlanets:new Set(),
+    trail:[],
+    prevAngle:startAngle,totalAngle:0
+  };
+  rocketGroup.position.copy(pos);
+  rocketGroup.scale.setScalar(baseRocketScale);
+  rocketGroup.visible=true;
+  rocketGroup.userData.flameMat.opacity=1;
+  flash();
+}
+
+function updateTrajectory(){
+  const pos=ghostRocket.position.clone();
+  const vel=new THREE.Vector3().copy(aimCurrentPos).sub(pos);
+  vel.y*=.6;
+  vel.multiplyScalar(LAUNCH_VEL_SCALE);
+
+  const dt=DT*2,steps=200;
+  const pts=[];
+  for(let i=0;i<steps;i++){
+    const acc=new THREE.Vector3();
+    for(const b of bodies){
+      const diff=new THREE.Vector3().copy(b.pos).sub(pos);
+      const dSq=diff.lengthSq();
+      if(dSq<.01)continue;
+      const d=Math.sqrt(dSq);
+      const f=G*b.mass/dSq;
+      acc.add(diff.clone().multiplyScalar(f/d));
+    }
+    vel.add(acc.multiplyScalar(dt));
+    pos.add(vel.clone().multiplyScalar(dt));
+    pts.push(pos.x,pos.y,pos.z);
+    if(pos.length()>80||(bodies.some(b=>!b.isSun&&pos.distanceTo(b.pos)<b.radius*.8)))break;
+  }
+  const geo=aimLine.geometry;
+  const attr=geo.attributes.position;
+  const count=Math.min(pts.length/3,attr.count);
+  for(let i=0;i<count;i++){attr.array[i*3]=pts[i*3];attr.array[i*3+1]=pts[i*3+1];attr.array[i*3+2]=pts[i*3+2];}
+  attr.needsUpdate=true;
+  geo.setDrawRange(0,count);
+  geo.computeBoundingSphere();
+  aimLine.visible=true;
+  // update glow overlay
+  const glow=aimLine.userData.glow;
+  if(glow){
+    const gAttr=glow.geometry.attributes.position;
+    for(let i=0;i<count;i++){gAttr.array[i*3]=pts[i*3];gAttr.array[i*3+1]=pts[i*3+1];gAttr.array[i*3+2]=pts[i*3+2];}
+    gAttr.needsUpdate=true;
+    glow.geometry.setDrawRange(0,count);
+    glow.geometry.computeBoundingSphere();
+    glow.visible=true;
+  }
+}
+
+// ─── PHYSICS ───────────────────────────────────────────────
+function updateRocketPhysics(dt){
+  if(!rocketState||!rocketState.active)return;
+  const s=rocketState;
+  const subDt=dt/SUBSTEPS;
+
+  for(let step=0;step<SUBSTEPS;step++){
+    const acc=new THREE.Vector3();
+    for(const b of bodies){
+      const diff=new THREE.Vector3().copy(b.pos).sub(s.pos);
+      const dSq=diff.lengthSq();
+      if(dSq<.001)continue;
+      const d=Math.sqrt(dSq);
+      const f=G*b.mass/dSq;
+      acc.add(diff.clone().multiplyScalar(f/d));
+
+      // collision
+      if(d<b.radius+0.1){
+        explode(s.pos);
+        if(b.isSun){showMsg('☀️ burned up!',false);score=Math.max(0,score-1);}
+        else{showMsg('💥 crashed!',false);score=Math.max(0,score-1);}
+        s.active=false;
+        chainMult=1;chainTimer=0;
+        updateScoreUI();
+        resetRocket();
+        return;
+      }
+
+      // slingshot scoring
+      if(!b.isSun&&d<b.radius*SLINGSHOT_RADIUS_FACTOR&&d>b.radius+0.15&&!s.scoredPlanets.has(b.index)){
+        s.scoredPlanets.add(b.index);
+        const pts=10+Math.floor(chainMult*5);
+        score+=pts;
+        chainMult++;
+        chainTimer=5;
+        showMsg(`⚡ slingshot! +${pts}`);
+        flash();
+        updateScoreUI();
+      }
+    }
+    s.vel.add(acc.multiplyScalar(subDt));
+    s.pos.add(s.vel.clone().multiplyScalar(subDt));
+    s.life+=subDt;
+
+    // orbit tracking (around sun at origin)
+    const curAngle=Math.atan2(s.pos.z,s.pos.x);
+    let dAngle=curAngle-s.prevAngle;
+    if(dAngle>Math.PI)dAngle-=Math.PI*2;
+    if(dAngle<-Math.PI)dAngle+=Math.PI*2;
+    s.totalAngle+=dAngle;
+    s.prevAngle=curAngle;
+    if(s.totalAngle>=Math.PI*2){
+      s.totalAngle-=Math.PI*2;
+      const pts=15+Math.floor(chainMult*8);
+      score+=pts;
+      chainMult++;
+      chainTimer=5;
+      showMsg(`🔄 orbit! +${pts}`);
+      flash();
+      updateScoreUI();
+    }
+  }
+
+  // spawn trail
+  if(s.trail.length<MAX_TRAIL){
+    const offset=new THREE.Vector3(
+      (Math.random()-.5)*.04,(Math.random()-.5)*.04,(Math.random()-.5)*.04
+    );
+    const pPos=s.pos.clone().add(offset);
+    const pVel=s.vel.clone().multiplyScalar(-.05).add(
+      new THREE.Vector3((Math.random()-.5)*.03,(Math.random()-.5)*.03,(Math.random()-.5)*.03)
+    );
+    spawnSmoke(pPos,pVel);
+    s.trail.push({pos:pPos.clone(),time:s.life});
+  }
+
+  // out of bounds
+  if(s.pos.length()>80){
+    showMsg('🚀 drifted off...');
+    s.active=false;
+    chainMult=1;chainTimer=0;
+    updateScoreUI();
+    resetRocket();
+  }
+
+  // max lifetime
+  if(s.life>30){
+    s.active=false;
+    resetRocket();
+  }
+}
+
+function explode(pos){
+  const n=40;
+  for(let i=0;i<n;i++){
+    const dir=new THREE.Vector3((Math.random()-.5)*2,(Math.random()-.5)*2,(Math.random()-.5)*2).normalize();
+    const speed=.5+Math.random()*2;
+    const pPos=pos.clone().add(dir.clone().multiplyScalar(.1));
+    const pVel=dir.multiplyScalar(speed);
+    const mesh=new THREE.Sprite(new THREE.SpriteMaterial({
+      map:flameTex,blending:THREE.AdditiveBlending,transparent:true,
+      opacity:1,color:new THREE.Color().setHSL(.05+Math.random()*.1,1,.5+Math.random()*.5),
+      depthWrite:false
+    }));
+    mesh.position.copy(pPos);
+    mesh.scale.setScalar(.05+Math.random()*.1);
+    scene.add(mesh);
+    explosionParticles.push({mesh,vel:pVel,life:1,maxLife:.5+Math.random()*.5});
+  }
+  flash();
+}
+
+function spawnLaunchBurst(pos){
+  const n=30;
+  for(let i=0;i<n;i++){
+    const dir=new THREE.Vector3((Math.random()-.5)*2,(Math.random()-.5)*2,(Math.random()-.5)*2).normalize();
+    const speed=.5+Math.random()*3;
+    const pPos=pos.clone().add(dir.clone().multiplyScalar(.05));
+    const pVel=dir.multiplyScalar(speed);
+    const mat=new THREE.SpriteMaterial({
+      map:flameTex,blending:THREE.AdditiveBlending,transparent:true,
+      color:new THREE.Color().setHSL(.07+Math.random()*.1,1,.6+Math.random()*.4),
+      depthWrite:false
+    });
+    const mesh=new THREE.Sprite(mat);
+    mesh.position.copy(pPos);
+    mesh.scale.setScalar(.04+Math.random()*.06);
+    scene.add(mesh);
+    explosionParticles.push({mesh,vel:pVel,life:1,maxLife:.3+Math.random()*.4});
+  }
+  for(let i=0;i<20;i++){
+    const dir=new THREE.Vector3((Math.random()-.5)*2,.2+Math.random()*.8,(Math.random()-.5)*2).normalize();
+    const speed=.2+Math.random()*.6;
+    const pPos=pos.clone().add(dir.clone().multiplyScalar(.05));
+    const pVel=dir.multiplyScalar(speed);
+    spawnSmoke(pPos,pVel);
+  }
+}
+
+// ─── PARTICLES ─────────────────────────────────────────────
+function spawnSmoke(pos,vel){
+  const mat=new THREE.SpriteMaterial({
+    map:smokeTex,blending:THREE.NormalBlending,transparent:true,
+    opacity:.4,depthWrite:false,color:0xaaaaaa
+  });
+  const mesh=new THREE.Sprite(mat);
+  mesh.position.copy(pos);
+  mesh.scale.setScalar(.02+Math.random()*.03);
+  scene.add(mesh);
+  smokeParticles.push({mesh,vel,life:1,maxLife:1.5+Math.random()*1});
+}
+
+function updateParticles(dt){
+  for(let i=smokeParticles.length-1;i>=0;i--){
+    const p=smokeParticles[i];
+    p.life-=dt/p.maxLife;
+    p.vel.multiplyScalar(.98);
+    p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.mesh.material.opacity=p.life*.4;
+    p.mesh.scale.addScalar(dt*.02);
+    if(p.life<=0){
+      scene.remove(p.mesh);
+      p.mesh.material.dispose();
+      smokeParticles.splice(i,1);
+    }
+  }
+
+  for(let i=explosionParticles.length-1;i>=0;i--){
+    const p=explosionParticles[i];
+    p.life-=dt/p.maxLife;
+    p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.vel.multiplyScalar(.96);
+    p.mesh.material.opacity=Math.max(0,p.life);
+    p.mesh.scale.addScalar(dt*.5);
+    if(p.life<=0){
+      scene.remove(p.mesh);
+      p.mesh.material.dispose();
+      explosionParticles.splice(i,1);
+    }
+  }
+}
+
+// ─── POST-PROCESSING ───────────────────────────────────────
+function setupPostProcessing(){
+  const w=Math.floor(window.innerWidth/2);
+  const h=window.innerHeight;
+
+  stereo=new THREE.StereoCamera();
+  stereo.eyeSep=.3;
+
+  const rsw=Math.max(1,Math.floor(w*renderScale));
+  const rsh=Math.max(1,Math.floor(h*renderScale));
+
+  composerL=new EffectComposer(renderer);
+  composerL.setSize(rsw,rsh);
+  composerL.addPass(new RenderPass(scene,stereo.cameraL));
+  try{
+    dofPassL=new BokehPass(scene,stereo.cameraL,{
+      focus:5,aperture:.015,maxblur:.008
+    });
+    composerL.addPass(dofPassL);
+  }catch(e){console.warn('DOF not available:',e)}
+  composerL.addPass(new UnrealBloomPass(new THREE.Vector2(rsw,rsh),.4,.5,.15));
+  composerL.addPass(new OutputPass());
+
+  composerR=new EffectComposer(renderer);
+  composerR.setSize(rsw,rsh);
+  composerR.addPass(new RenderPass(scene,stereo.cameraR));
+  try{
+    dofPassR=new BokehPass(scene,stereo.cameraR,{
+      focus:5,aperture:.015,maxblur:.008
+    });
+    composerR.addPass(dofPassR);
+  }catch(e){}
+  composerR.addPass(new UnrealBloomPass(new THREE.Vector2(rsw,rsh),.4,.5,.15));
+  composerR.addPass(new OutputPass());
+}
+
+function applyRenderScale(){
+  const w=window.innerWidth;
+  const h=window.innerHeight;
+  const sw=Math.max(1,Math.floor(w/2*renderScale));
+  const sh=Math.max(1,Math.floor(h*renderScale));
+  composerL.setSize(sw,sh);
+  composerR.setSize(sw,sh);
+  const bloomL=composerL.passes.find(p=>p instanceof UnrealBloomPass);
+  const bloomR=composerR.passes.find(p=>p instanceof UnrealBloomPass);
+  if(bloomL)bloomL.resolution.set(sw,sh);
+  if(bloomR)bloomR.resolution.set(sw,sh);
+}
+
+function updateDOFFocus(){
+  const camPos=camera.position;
+  const targetPos=rocketState?.active?rocketState.pos:rocketGroup.position;
+  const best=camPos.distanceTo(targetPos);
+  if(dofPassL)dofPassL.uniforms.focus.value=best;
+  if(dofPassR)dofPassR.uniforms.focus.value=best;
+}
+
+let frameCount=0,fpsTime=0;
+function updateFPS(dt){
+  frameCount++;
+  fpsTime+=dt;
+  if(fpsTime>=.5){
+    document.getElementById('fps').textContent=Math.round(frameCount/fpsTime)+' fps';
+    frameCount=0;fpsTime=0;
+  }
+}
+
+// ─── STEREO RENDERING ──────────────────────────────────────
+function renderStereo(){
+  stereo.update(camera);
+
+  const w=Math.floor(window.innerWidth/2);
+  const h=window.innerHeight;
+  const eyeAspect=w/h;
+  stereo.cameraL.aspect=eyeAspect;
+  stereo.cameraL.updateProjectionMatrix();
+  stereo.cameraR.aspect=eyeAspect;
+  stereo.cameraR.updateProjectionMatrix();
+
+  renderer.setViewport(0,0,w,h);
+  renderer.setScissor(0,0,w,h);
+  renderer.setScissorTest(true);
+  composerL.render();
+
+  renderer.setViewport(w,0,w,h);
+  renderer.setScissor(w,0,w,h);
+  composerR.render();
+
+  renderer.setScissorTest(false);
+
+  if(isAiming)renderMiniMap(w,h);
+}
+
+function updateMiniCamera(){
+  const ghostPos=ghostRocket.position;
+  const hs=16;
+  miniCamera.position.set(ghostPos.x,50,ghostPos.z);
+  miniCamera.left=ghostPos.x-hs;
+  miniCamera.right=ghostPos.x+hs;
+  miniCamera.top=ghostPos.z+hs;
+  miniCamera.bottom=ghostPos.z-hs;
+  miniCamera.updateProjectionMatrix();
+}
+
+function renderMiniMap(w,h){
+  updateMiniCamera();
+
+  const prevClearColor=renderer.getClearColor(new THREE.Color());
+  const prevClearAlpha=renderer.getClearAlpha();
+
+  const displaySize=Math.min(w*.32,260);
+  const renderSize=Math.max(1,Math.floor(displaySize/2));
+  const gap=8;
+  const x=w-displaySize-gap;
+  const y=h-displaySize-gap;
+
+  for(let eye=0;eye<2;eye++){
+    const ox=eye*w;
+    renderer.setViewport(ox+x,y,renderSize,renderSize);
+    renderer.setScissor(ox+x,y,renderSize,renderSize);
+    renderer.setScissorTest(true);
+    renderer.setClearColor(0x080816,1);
+    renderer.render(scene,miniCamera);
+  }
+
+  renderer.setScissorTest(false);
+  renderer.setClearColor(prevClearColor,prevClearAlpha);
+}
+
+// ─── CONTROLS ──────────────────────────────────────────────
+const _rc=new THREE.Raycaster();
+const _plane=new THREE.Plane();
+const _camDir=new THREE.Vector3();
+const _point=new THREE.Vector3();
+
+function getWorldPosFromScreen(clientX,clientY,refPos){
+  _rc.setFromCamera(new THREE.Vector2((clientX/window.innerWidth)*2-1,-(clientY/window.innerHeight)*2+1),camera);
+  const ref=refPos||rocketGroup.position;
+  camera.getWorldDirection(_camDir);
+  _plane.setFromNormalAndCoplanarPoint(_camDir,ref);
+  _rc.ray.intersectPlane(_plane,_point);
+  return _point.clone();
+}
+
+function hitTestRocket(clientX,clientY){
+  stereo.update(camera);
+  const w2=Math.floor(window.innerWidth/2);
+  const eyeIdx=clientX<w2?0:1;
+  const eyeCam=eyeIdx?stereo.cameraR:stereo.cameraL;
+  const ndcEye=new THREE.Vector2(((clientX-eyeIdx*w2)/w2)*2-1,-(clientY/window.innerHeight)*2+1);
+  _rc.setFromCamera(ndcEye,eyeCam);
+  return _rc.intersectObject(rocketGroup,true).length>0;
+}
+
+function onPointerDown(e){
+  if(e.button!==0)return;
+  isPointerDown=true;
+  if(!isAiming&&!rocketState?.active&&hitTestRocket(e.clientX,e.clientY)){
+    const wp=getWorldPosFromScreen(e.clientX,e.clientY);
+    startAim(wp);
+  }else if(!isAiming&&!isOrbiting){
+    isOrbiting=true;
+    orbitStartX=e.clientX;
+    orbitStartY=e.clientY;
+    orbitStartAngle=camAngle;
+    orbitStartHeight=camHeight;
+  }
+}
+
+function onPointerMove(e){
+  mouse.set(e.clientX,e.clientY);
+  if(isAiming&&isPointerDown){
+    const wp=getWorldPosFromScreen(e.clientX,e.clientY);
+    updateAim(wp);
+  }
+
+  // eye debug rays visible
+  debugRayL.visible=document.getElementById('toggleRays').checked;
+  debugRayR.visible=debugRayL.visible;
+
+  // hover: intersect eye rays against bodies + rocket
+  stereo.update(camera);
+  const w2=Math.floor(window.innerWidth/2);
+  const h=window.innerHeight;
+  const eyeIdx=e.clientX<w2?0:1;
+  const eyeCam=eyeIdx?stereo.cameraR:stereo.cameraL;
+  const ndcEye=new THREE.Vector2(((e.clientX-eyeIdx*w2)/w2)*2-1,-(e.clientY/h)*2+1);
+  _rc.setFromCamera(ndcEye,eyeCam);
+
+  // check body hits
+  const hitMeshes=bodies.filter(b=>b.mesh).map(b=>b.mesh);
+  const bodyHits=_rc.intersectObjects(hitMeshes);
+  let newHovered=null;
+  for(const hh of bodyHits){
+    const b=bodies.find(b=>b.mesh===hh.object);
+    if(b&&!b.isSun){newHovered=b;break}
+  }
+
+  // check rocket hit
+  const rocketHits=_rc.intersectObject(rocketGroup,true);
+  rocketHovered=!isAiming&&!rocketState?.active&&rocketHits.length>0;
+
+  if(newHovered!==hoveredBody)hoveredBody=newHovered;
+
+  if(isOrbiting){
+    const dx=e.clientX-orbitStartX;
+    const dy=e.clientY-orbitStartY;
+    camAngle=orbitStartAngle-dx*.005;
+    camHeight=Math.max(.5,Math.min(20,orbitStartHeight+dy*.02));
+  }
+
+  if(isOrbiting){
+    renderer.domElement.style.cursor='grabbing';
+  }else if(!isAiming&&!rocketState?.active){
+    renderer.domElement.style.cursor=rocketHovered?'grab':'default';
+  }
+}
+
+function onPointerUp(e){
+  if(e.button!==0)return;
+  isPointerDown=false;
+  if(isAiming)releaseAim();
+  isOrbiting=false;
+}
+
+function onKey(e){
+  if(e.key==='f'||e.key==='F'){
+    if(document.fullscreenElement)document.exitFullscreen();
+    else document.body.requestFullscreen();
+  }
+  if(e.key==='r'||e.key==='R'){
+    resetRocket();
+    if(rocketState?.active){
+      rocketState.active=false;
+      resetRocket();
+    }
+  }
+  if(e.key==='b'||e.key==='B'){
+    const cb=document.getElementById('toggleBloom');
+    cb.checked=!cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  }
+  if(e.shiftKey&&(e.key==='d'||e.key==='D')){
+    const cb=document.getElementById('toggleDof');
+    cb.checked=!cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  }
+  if(e.key==='S'){
+    document.getElementById('panelBtn').click();
+  }
+  if(e.key==='g'||e.key==='G'){
+    const cb=document.getElementById('toggleRays');
+    cb.checked=!cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  }
+}
+
+function onWheel(e){
+  e.preventDefault();
+  camDist*=1+e.deltaY*.001;
+  camDist=Math.max(4,Math.min(60,camDist));
+}
+
+function onResize(){
+  clearTimeout(resizeTimeout);
+  resizeTimeout=setTimeout(()=>{
+    const w=window.innerWidth,h=window.innerHeight;
+    camera.aspect=w/h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w,h);
+    applyRenderScale();
+  },200);
+}
+
+// ─── GAME LOOP ─────────────────────────────────────────────
+function animate(){
+  requestAnimationFrame(animate);
+
+  const dt=Math.min(clock.getDelta(),.05);
+
+  // update planets
+  for(const b of bodies){
+    if(b.isSun)continue;
+    if(b.parent){
+      // moon: orbit parent
+      b.angle+=dt*Math.sqrt(G*b.parent.mass/(b.orbitR*b.orbitR*b.orbitR));
+      b.pos.x=b.parent.pos.x+Math.cos(b.angle)*b.orbitR;
+      b.pos.z=b.parent.pos.z+Math.sin(b.angle)*b.orbitR;
+      b.pos.y=b.parent.pos.y+Math.sin(b.angle*.5)*.05;
+      if(b.mesh)b.mesh.position.copy(b.pos);
+    } else if(b.orbitR){
+      // planet: orbit sun
+      b.angle+=dt*Math.sqrt(G*SUN_MASS/(b.orbitR*b.orbitR*b.orbitR));
+      b.pos.x=Math.cos(b.angle)*b.orbitR;
+      b.pos.z=Math.sin(b.angle)*b.orbitR;
+      b.mesh.position.copy(b.pos);
+      if(b.mesh.userData.ring){
+        b.mesh.userData.ring.position.copy(b.pos);
+        b.mesh.userData.ring.rotation.z=Math.sin(b.angle)*.1;
+      }
+    }
+  }
+
+  // rocket physics
+  if(rocketState?.active){
+    updateRocketPhysics(dt);
+    if(rocketState.active){
+      rocketGroup.position.copy(rocketState.pos);
+      // orient rocket in velocity direction
+      if(rocketState.vel.length()>.01){
+        const q=new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0,1,0),
+          rocketState.vel.clone().normalize()
+        );
+        rocketGroup.quaternion.copy(q);
+      }
+    } else {
+      rocketGroup.visible=false;
+      rocketGroup.userData.flameMat.opacity=0;
+    }
+  }
+
+  // flame flicker
+  if(rocketGroup.visible&&rocketState?.active){
+    rocketGroup.userData.flameMat.opacity=.6+Math.random()*.4;
+    rocketGroup.userData.flame.scale.setScalar(.25+Math.random()*.15);
+  }
+
+  // chain timer
+  if(chainTimer>0){
+    chainTimer-=dt;
+    if(chainTimer<=0){chainMult=1;updateScoreUI();}
+  }
+
+  // update particles
+  updateParticles(dt);
+
+  // sun rotation + voronoi animation
+  sunMesh.rotation.y+=dt*.4;
+  if(sunMesh.material.uniforms)sunMesh.material.uniforms.uTime.value+=dt;
+  sunGlow.material.opacity=.4+Math.sin(performance.now()*.001)*.1;
+
+  // camera movement
+  const camSpeed=5*dt;
+  if(keys.has('w')||keys.has('W'))camDist-=camSpeed;
+  if(keys.has('s'))camDist+=camSpeed;
+  if(keys.has('a')||keys.has('A'))camAngle-=camSpeed*.4;
+  if(keys.has('d')||keys.has('D'))camAngle+=camSpeed*.4;
+  if(keys.has('ArrowUp'))camHeight+=camSpeed;
+  if(keys.has('ArrowDown'))camHeight-=camSpeed;
+  camDist=Math.max(3,Math.min(60,camDist));
+  camHeight=Math.max(.5,Math.min(20,camHeight));
+  const hDist=Math.sqrt(Math.max(0,camDist*camDist-camHeight*camHeight));
+  camera.position.set(Math.sin(camAngle)*hDist,camHeight,Math.cos(camAngle)*hDist);
+  camera.lookAt(0,0,0);
+
+  // parent idle rocket to camera
+  if(!rocketState&&!isAiming){
+    const fwd=new THREE.Vector3();camera.getWorldDirection(fwd);
+    const right=new THREE.Vector3().crossVectors(fwd,camera.up).normalize();
+    const up=new THREE.Vector3(0,1,0);
+    rocketGroup.position.copy(camera.position)
+      .add(right.clone().multiplyScalar(ROCKET_CAM_OFFSET.x))
+      .add(up.clone().multiplyScalar(ROCKET_CAM_OFFSET.y))
+      .add(fwd.clone().multiplyScalar(ROCKET_CAM_OFFSET.z));
+    rocketGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),fwd);
+    rocketGroup.visible=true;
+    rocketGroup.userData.flameMat.opacity=0;
+    ghostRocket.visible=false;
+    aimLine.visible=false;
+    aimMarker.visible=false;
+  }
+
+  // smooth hover effects for all bodies
+  const lerp=Math.min(1,5*dt);
+  for(const b of bodies){
+    if(!b.mesh)continue;
+    const m=b.mesh;
+    const isHover=m===hoveredBody?.mesh;
+    const tScale=isHover?1.4:1;
+    const tEmissive=isHover?0.5:m.userData.origEmissiveIntensity;
+    const curScale=m.scale.x;
+    const curEmissive=m.material.emissiveIntensity;
+    m.scale.setScalar(curScale+(tScale-curScale)*lerp);
+    m.material.emissiveIntensity=curEmissive+(tEmissive-curEmissive)*lerp;
+  }
+
+  if(!rocketState&&!isAiming){
+    const tRocketScale=rocketHovered?baseRocketScale*1.5:baseRocketScale;
+    const curRScale=rocketGroup.scale.x;
+    rocketGroup.scale.setScalar(curRScale+(tRocketScale-curRScale)*lerp);
+  }
+
+  // pulse aim marker
+  if(aimMarker.visible){
+    const pulse=.7+.3*Math.sin(performance.now()*.006);
+    aimMarker.material.opacity=pulse;
+    aimMarker.scale.setScalar(1+.2*Math.sin(performance.now()*.004));
+  }
+
+  // debug raycast from eye viewports
+  if(debugRayL&&debugRayR){
+    stereo.update(camera);
+    const w=Math.floor(window.innerWidth/2);
+    const h=window.innerHeight;
+    const ndcL=new THREE.Vector2((mouse.x/w)*2-1,-(mouse.y/h)*2+1);
+    const ndcR=new THREE.Vector2(((mouse.x-w)/w)*2-1,-(mouse.y/h)*2+1);
+    _rc.setFromCamera(ndcL,stereo.cameraL);
+    const pL=_rc.ray.origin.clone().add(_rc.ray.direction.clone().multiplyScalar(30));
+    const posL=debugRayL.geometry.attributes.position;
+    posL.array[0]=_rc.ray.origin.x;posL.array[1]=_rc.ray.origin.y;posL.array[2]=_rc.ray.origin.z;
+    posL.array[3]=pL.x;posL.array[4]=pL.y;posL.array[5]=pL.z;
+    posL.needsUpdate=true;
+    _rc.setFromCamera(ndcR,stereo.cameraR);
+    const pR=_rc.ray.origin.clone().add(_rc.ray.direction.clone().multiplyScalar(30));
+    const posR=debugRayR.geometry.attributes.position;
+    posR.array[0]=_rc.ray.origin.x;posR.array[1]=_rc.ray.origin.y;posR.array[2]=_rc.ray.origin.z;
+    posR.array[3]=pR.x;posR.array[4]=pR.y;posR.array[5]=pR.z;
+    posR.needsUpdate=true;
+  }
+
+  // launch cooldown
+  //
+
+  // hand tracking from aim
+  if(handActive&&handPos){
+    if(handPinching){
+      if(!isAiming&&!rocketState?.active&&hitTestRocket(handPos.x*window.innerWidth,handPos.y*window.innerHeight)){
+        const wp=getWorldPosFromScreen(handPos.x*window.innerWidth,handPos.y*window.innerHeight);
+        startAim(wp);
+      }else if(isAiming){
+        const wp=getWorldPosFromScreen(handPos.x*window.innerWidth,handPos.y*window.innerHeight);
+        updateAim(wp);
+      }
+    }else{
+      if(isAiming)releaseAim();
+    }
+  }
+
+  // update DOF focus
+  updateDOFFocus();
+  updateFPS(dt);
+
+  // render
+  renderStereo();
+}
+
+// ─── MEDIAPIPE WEBRTC ──────────────────────────────────────
+async function initWebcam(){
+  const btn=document.getElementById('webcamBtn');
+  if(webcamActive){
+    webcamActive=false;
+    handActive=false;
+    btn.textContent='📷 hands';
+    btn.classList.remove('active');
+    if(videoEl){videoEl.srcObject?.getTracks().forEach(t=>t.stop());videoEl.remove();videoEl=null;}
+    document.getElementById('status').innerHTML='🤏 pinch hand / 🖱 drag mouse · release to launch · <kbd>f</kbd> fullscreen · <kbd>r</kbd> reset';
+    return;
+  }
+
+  btn.textContent='⏳ loading...';
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:320,height:240}});
+    videoEl=document.createElement('video');
+    videoEl.srcObject=stream;
+    videoEl.width=320;videoEl.height=240;
+    videoEl.muted=true;videoEl.playsInline=true;
+    await videoEl.play();
+    videoEl.style.position='fixed';videoEl.style.bottom='60px';videoEl.style.right='10px';
+    videoEl.style.width='160px';videoEl.style.borderRadius='8px';
+    videoEl.style.border='1px solid rgba(255,255,255,.2)';
+    videoEl.style.zIndex='20';videoEl.style.transform='scaleX(-1)';
+    document.body.appendChild(videoEl);
+
+    handOverlayCanvas=document.createElement('canvas');
+    handOverlayCanvas.width=320;handOverlayCanvas.height=240;
+    handOverlayCanvas.style.position='fixed';handOverlayCanvas.style.bottom='60px';handOverlayCanvas.style.right='10px';
+    handOverlayCanvas.style.width='160px';handOverlayCanvas.style.borderRadius='8px';
+    handOverlayCanvas.style.pointerEvents='none';
+    handOverlayCanvas.style.zIndex='21';handOverlayCanvas.style.transform='scaleX(-1)';
+    document.body.appendChild(handOverlayCanvas);
+
+    // Load MediaPipe
+    const {HandLandmarker,FilesetResolver}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
+    const vision=await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm/'
+    );
+    handLandmarker=await HandLandmarker.createFromOptions(vision,{
+      baseOptions:{
+        modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task',
+        delegate:'GPU'
+      },
+      runningMode:'VIDEO',
+      numHands:2,
+      minHandDetectionConfidence:.5
+    });
+
+    webcamActive=true;
+    handActive=true;
+    btn.textContent='📷 on';
+    btn.classList.add('active');
+    document.getElementById('status').innerHTML='✋ show hand to control rocket · <kbd>f</kbd> fullscreen · <kbd>r</kbd> reset';
+
+    // Start hands detection loop
+    detectHands();
+
+  }catch(e){
+    console.warn('Webcam/MediaPipe error:',e);
+    btn.textContent='📷 hands';
+    document.getElementById('status').innerHTML='🤏 pinch hand / 🖱 drag mouse · release to launch · <kbd>f</kbd> fullscreen · <kbd>r</kbd> reset';
+    showMsg('webcam or mediapipe unavailable',false);
+  }
+}
+
+const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+
+function drawHandOverlay(landmarks){
+  if(!handOverlayCanvas)return;
+  const ctx=handOverlayCanvas.getContext('2d');
+  const w=handOverlayCanvas.width,h=handOverlayCanvas.height;
+  ctx.clearRect(0,0,w,h);
+
+  for(const hand of landmarks){
+    ctx.strokeStyle='rgba(0,255,180,.5)';
+    ctx.lineWidth=2;
+    for(const [i,j] of HAND_CONNECTIONS){
+      const a=hand[i],b=hand[j];
+      ctx.beginPath();
+      ctx.moveTo(a.x*w,a.y*h);
+      ctx.lineTo(b.x*w,b.y*h);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle='rgba(0,255,180,.8)';
+    for(let i=0;i<21;i++){
+      const p=hand[i];
+      ctx.beginPath();
+      ctx.arc(p.x*w,p.y*h,3,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // highlight fingertips (indices 4,8,12,16,20)
+    ctx.fillStyle='rgba(255,200,50,.9)';
+    for(const i of[4,8,12,16,20]){
+      const p=hand[i];
+      ctx.beginPath();
+      ctx.arc(p.x*w,p.y*h,4,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // index finger tip (pinch point) extra highlight
+    const idx=hand[8];
+    ctx.strokeStyle='rgba(255,100,50,.8)';
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(idx.x*w,idx.y*h,8,0,Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+let lastHandTime=0;
+function detectHands(){
+  if(!handActive||!videoEl||!handLandmarker)return;
+  const now=performance.now();
+  if(now-lastHandTime<50){requestAnimationFrame(detectHands);return;} // ~20fps
+  lastHandTime=now;
+
+  try{
+    const results=handLandmarker.detectForVideo(videoEl,now);
+    if(results.landmarks?.length>0){
+      const hand=results.landmarks[0];
+      handLandmarks=results.landmarks;
+      const thumb=hand[4],index=hand[8];
+      const dx=thumb.x-index.x,dy=thumb.y-index.y,dz=(thumb.z??0)-(index.z??0);
+      const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      handPinching=dist<.045;
+
+      // Use index finger tip for position
+      // Mirror because video is mirrored
+      handPos={x:1-index.x,y:index.y};
+      drawHandOverlay(handLandmarks);
+    }else{
+      handPos=null;
+      handPinching=false;
+      handLandmarks=null;
+      if(handOverlayCanvas){
+        const ctx=handOverlayCanvas.getContext('2d');
+        ctx.clearRect(0,0,handOverlayCanvas.width,handOverlayCanvas.height);
+      }
+    }
+  }catch(e){}  
+
+  requestAnimationFrame(detectHands);
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+try{init()}catch(e){
+  console.error('Init error:',e);
+  document.body.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#fff;font-family:monospace;text-align:center;padding:2em"><div><h1>Error</h1><p style="opacity:.6;margin-top:1em">${e.message||'Failed to initialize'}</p></div></div>`;
+}
+</script>
+</body>
+</html>
